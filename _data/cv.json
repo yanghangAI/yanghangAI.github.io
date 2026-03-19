@@ -4,7 +4,7 @@
     "email": "hangyang@umass.edu",
     "phone": "",
     "website": "https://yanghangAI.github.io",
-    "summary": "PhD candidate in Mathematics at the University of Massachusetts Amherst. Researching machine learning and deep learning, with a focus on invertible neural networks for image steganography and vision transformers for medical AI.",
+    "summary": "PhD candidate in Mathematics at the University of Massachusetts Amherst. Researching machine learning, robotics, and deep learning — including mobile motion capture with robot dogs, invertible neural networks for image steganography, and vision transformers for medical AI.",
     "location": {
       "address": "",
       "postalCode": "",
@@ -44,7 +44,7 @@
     },
     {
       "name": "Research Areas",
-      "keywords": ["Image Steganography", "Medical Image Analysis", "Computer Vision"]
+      "keywords": ["Mobile Motion Capture", "Robotics", "Image Steganography", "Medical Image Analysis", "Computer Vision"]
     }
   ],
   "languages": [],

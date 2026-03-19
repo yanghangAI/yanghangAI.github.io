@@ -7,10 +7,12 @@ redirect_from:
   - /about.html
 ---
 
-I am a PhD candidate in the [Department of Mathematics and Statistics](https://www.umass.edu/mathematics-statistics/) at the [University of Massachusetts Amherst](https://www.umass.edu/). My research lies at the intersection of machine learning and applied mathematics, with a focus on **deep learning for image steganography** and **vision transformers for medical image analysis**.
+I am a PhD candidate in the [Department of Mathematics and Statistics](https://www.umass.edu/mathematics-statistics/) at the [University of Massachusetts Amherst](https://www.umass.edu/). My research lies at the intersection of machine learning, applied mathematics, and robotics, with a focus on **deep learning for image steganography**, **vision transformers for medical image analysis**, and **mobile motion capture with legged robots**.
 
 ## Research Interests
 
+- **Mobile Motion Capture** — using a robot dog as a mobile motion capture platform to enable flexible, large-scale human motion recording beyond the constraints of traditional fixed studio setups
+- **Robotics** — legged robot perception, autonomy, and human-robot interaction
 - **Image Steganography** — developing invertible neural networks that hide secret images within carrier images robustly and securely ([PRIS](https://arxiv.org/abs/2309.13620), [DKiS](https://arxiv.org/abs/2311.18243))
 - **Medical AI** — applying transformer-based architectures to automated disease detection from medical imaging ([CovidViT](https://link.springer.com/article/10.1007/s13042-022-01676-7))
 - **Invertible Neural Networks** — designing networks with exact invertibility for lossless information recovery
