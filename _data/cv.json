@@ -1,152 +1,94 @@
 {
   "basics": {
-    "name": "Your Sidebar Name",
-    "email": "none@example.org",
+    "name": "Hang Yang",
+    "email": "hangyang@umass.edu",
     "phone": "",
-    "website": "https://academicpages.github.io",
-    "summary": "Currently employed at Red Brick University. Short biography for the left-hand sidebar",
+    "website": "https://yanghangAI.github.io",
+    "summary": "PhD candidate in Mathematics at the University of Massachusetts Amherst. Researching machine learning and deep learning, with a focus on invertible neural networks for image steganography and vision transformers for medical AI.",
     "location": {
       "address": "",
       "postalCode": "",
-      "city": "Earth",
+      "city": "Amherst",
       "countryCode": "US",
-      "region": ""
+      "region": "Massachusetts"
     },
     "profiles": [
       {
         "network": "Google Scholar",
-        "username": "",
-        "url": "https://scholar.google.com/citations?user=PS_CX0AAAAAJ"
-      },
-      {
-        "network": "ORCID",
-        "username": "",
-        "url": "https://orcid.org/yourorcidurl"
+        "username": "Hang Yang",
+        "url": "https://scholar.google.com/citations?user=usu8YBAAAAAJ"
       },
       {
         "network": "GitHub",
-        "username": "academicpages",
-        "url": "https://github.com/academicpages"
+        "username": "yanghangAI",
+        "url": "https://github.com/yanghangAI"
       }
     ]
   },
   "work": [],
   "education": [
     {
-      "institution": "GitHub University",
-      "area": "Ph.D in Version Control Theory",
-      "studyType": "",
-      "startDate": "",
-      "endDate": "2018",
-      "gpa": null,
-      "courses": []
-    },
-    {
-      "institution": "GitHub University",
-      "area": "M.S. in Jekyll",
-      "studyType": "",
-      "startDate": "",
-      "endDate": "2014",
-      "gpa": null,
-      "courses": []
-    },
-    {
-      "institution": "GitHub University",
-      "area": "B.S. in GitHub",
-      "studyType": "",
-      "startDate": "",
-      "endDate": "2012",
+      "institution": "University of Massachusetts Amherst",
+      "area": "Ph.D. in Mathematics",
+      "studyType": "PhD",
+      "startDate": "2021",
+      "endDate": "",
       "gpa": null,
       "courses": []
     }
   ],
-  "skills": [],
+  "skills": [
+    {
+      "name": "Machine Learning",
+      "keywords": ["Deep Learning", "Invertible Neural Networks", "Vision Transformers", "PyTorch"]
+    },
+    {
+      "name": "Research Areas",
+      "keywords": ["Image Steganography", "Medical Image Analysis", "Computer Vision"]
+    }
+  ],
   "languages": [],
   "interests": [],
   "references": [],
   "publications": [
     {
-      "name": "Paper Title Number 1",
-      "publisher": "Journal 1",
-      "releaseDate": "2009-10-01",
-      "website": "https://academicpages.github.io/files/paper1.pdf",
-      "summary": "This paper is about the number 1. The number 2 is left for future work."
+      "name": "DKiS: Decay weight invertible image steganography with private key",
+      "publisher": "Neural Networks",
+      "releaseDate": "2025-01-01",
+      "website": "https://arxiv.org/abs/2311.18243",
+      "summary": "Introduces a decay weight mechanism and private key integration into high-capacity invertible image steganography, ensuring secure access to hidden information requires a corresponding key."
     },
     {
-      "name": "Paper Title Number 2",
-      "publisher": "Journal 1",
-      "releaseDate": "2010-10-01",
-      "website": "https://academicpages.github.io/files/paper2.pdf",
-      "summary": "This paper is about the number 2. The number 3 is left for future work."
+      "name": "PRIS: Practical robust invertible network for image steganography",
+      "publisher": "Engineering Applications of Artificial Intelligence",
+      "releaseDate": "2024-04-01",
+      "website": "https://arxiv.org/abs/2309.13620",
+      "summary": "A practical robust invertible network for image steganography incorporating pre/post-enhancement modules and a gradient approximation function to handle rounding errors, achieving state-of-the-art robustness under multiple attacks."
     },
     {
-      "name": "Paper Title Number 3",
-      "publisher": "Journal 1",
-      "releaseDate": "2015-10-01",
-      "website": "https://academicpages.github.io/files/paper3.pdf",
-      "summary": "This paper is about the number 3. The number 4 is left for future work."
-    },
-    {
-      "name": "Paper Title Number 4",
-      "publisher": "GitHub Journal of Bugs",
-      "releaseDate": "2024-02-17",
-      "website": "https://academicpages.github.io/files/paper3.pdf",
-      "summary": "This paper is about fixing template issue #693."
+      "name": "CovidViT: a novel neural network with self-attention mechanism to detect Covid-19 through X-ray images",
+      "publisher": "International Journal of Machine Learning and Cybernetics",
+      "releaseDate": "2022-12-01",
+      "website": "https://link.springer.com/article/10.1007/s13042-022-01676-7",
+      "summary": "First application of a vision transformer architecture with self-attention mechanism to COVID-19 detection from chest X-rays, achieving 98.0% accuracy on the test set."
     }
   ],
-  "presentations": [
-    {
-      "name": "Talk 1 on Relevant Topic in Your Field",
-      "event": "UC San Francisco, Department of Testing",
-      "date": "2012-03-01",
-      "location": "San Francisco, CA, USA",
-      "description": ""
-    },
-    {
-      "name": "Tutorial 1 on Relevant Topic in Your Field",
-      "event": "UC-Berkeley Institute for Testing Science",
-      "date": "2013-03-01",
-      "location": "Berkeley, CA, USA",
-      "description": ""
-    },
-    {
-      "name": "Talk 2 on Relevant Topic in Your Field",
-      "event": "London School of Testing",
-      "date": "2014-02-01",
-      "location": "London, UK",
-      "description": ""
-    },
-    {
-      "name": "Conference Proceeding talk 3 on Relevant Topic in Your Field",
-      "event": "Testing Institute of America 2014 Annual Conference",
-      "date": "2014-03-01",
-      "location": "Los Angeles, CA, USA",
-      "description": ""
-    }
-  ],
+  "presentations": [],
   "teaching": [
     {
-      "course": "Teaching experience 1",
-      "institution": "University 1, Department",
-      "date": "2014-01-01",
-      "role": "Undergraduate course",
-      "description": ""
+      "course": "MATH 233: Calculus 3",
+      "institution": "University of Massachusetts Amherst, Department of Mathematics and Statistics",
+      "date": "2024-01-01",
+      "role": "Teaching Assistant",
+      "description": "Teaching assistant for multivariable calculus covering partial derivatives, multiple integrals, and vector calculus."
     },
     {
-      "course": "Teaching experience 2",
-      "institution": "University 1, Department",
-      "date": "2015-01-01",
-      "role": "Workshop",
-      "description": ""
+      "course": "MATH 132: Calculus 2",
+      "institution": "University of Massachusetts Amherst, Department of Mathematics and Statistics",
+      "date": "2023-01-01",
+      "role": "Teaching Assistant",
+      "description": "Teaching assistant for integral calculus covering integration techniques, series, and applications."
     }
   ],
-  "portfolio": [
-    {
-      "name": "Portfolio item number 1",
-      "category": "portfolio",
-      "date": "",
-      "url": "",
-      "description": "Short description of portfolio item number 1<br/><img src='/images/500x300.png'>"
-    }
-  ]
+  "portfolio": []
 }
