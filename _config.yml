@@ -26,7 +26,7 @@ author:
   avatar           : "profile.png"
   name             : "Hang Yang"
   pronouns         : "he/him" 
-  bio              : "PhD candidate in Mathematics at UMass Amherst. Researching machine learning and deep learning, with a focus on invertible neural networks for image steganography and vision transformers for medical AI."
+  bio              : "PhD candidate in Mathematics at UMass Amherst. Researching machine learning, robotics, and deep learning — including mobile motion capture with robot dogs, invertible neural networks for image steganography, and vision transformers for medical AI."
   location         : "U.S."
   employer         : "University of Massachusetts Amherst"
   uri              : # URL
