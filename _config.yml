@@ -9,7 +9,7 @@
 # Basic Site Settings
 locale                   : "en-US"
 site_theme               : "default" # The available themes options are "default", "air", "sunrise", "mint", "dirt" and "contrast"
-title                    : "Hang Yang / PhD candicate"
+title                    : "Hang Yang / PhD Candidate"
 title_separator          : "-"
 name                     : &name "Hang Yang"
 description              : &description "Hang Yang's academic portfolio — PhD candidate in Mathematics at UMass Amherst, researching machine learning and deep learning."   # Update this with a general description of your site, this is the default if not overridden by a page
