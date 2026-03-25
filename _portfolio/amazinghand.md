@@ -1,6 +1,6 @@
 ---
-title: "AmazingHand: Dexterous Robotic Hand"
-excerpt: "A 3D-printed dexterous robotic hand with independently actuated fingers, designed for dexterous manipulation research.<br/><img src='/images/IMG_0037.jpeg' style='max-width:500px;'>"
+title: "AmazingHand: Dexterous Robotic Hand Build"
+excerpt: "A personal build of the open-source AmazingHand — a 3D-printed dexterous robotic hand with independently actuated fingers.<br/><img src='/images/IMG_0037.jpeg' style='max-width:500px;'>"
 collection: portfolio
 ---
 
@@ -8,24 +8,13 @@ collection: portfolio
 
 **GitHub:** [pollen-robotics/AmazingHand](https://github.com/pollen-robotics/AmazingHand)
 
-**AmazingHand** is a 3D-printed dexterous robotic hand designed for research in dexterous manipulation and human-robot interaction.
+A fun personal build of the open-source **AmazingHand** project by [Pollen Robotics](https://github.com/pollen-robotics). AmazingHand is a 3D-printed dexterous robotic hand with independently actuated fingers.
 
-### Features
+### Build Details
 
-- **5-finger design** with independently actuated fingers and thumb, enabling a wide range of grasps and gestures
-- **Servo-driven joints** connected via a tendon-based mechanism for compact, lightweight actuation
-- **3D-printed structure** using FDM printing (white PETG palm + black PET-CF finger segments) for a balance of flexibility, strength, and rigidity
-- Modular connector wiring for easy sensor integration and control
+- **5-finger design** with independently actuated fingers and thumb
+- **Servo-driven joints** connected via a tendon-based mechanism
+- **3D-printed** with white PETG (palm) and black PET-CF (finger segments)
+- Modular connector wiring throughout
 
-### Motivation
-
-Human hands are extraordinarily versatile tools. AmazingHand aims to replicate this dexterity in a low-cost, reproducible platform suitable for manipulation research, prosthetics exploration, and motion-capture-driven teleoperation.
-
-### Status
-
-Currently under active development. Ongoing work includes:
-- Closed-loop finger position control
-- Integration with motion capture glove for teleoperation
-- Tactile sensing on fingertips
-
-<img src="/images/IMG_0037.jpeg" alt="AmazingHand robotic hand prototype" style="max-width:600px; display:block; margin:auto;">
+<img src="/images/IMG_0037.jpeg" alt="AmazingHand robotic hand build" style="max-width:600px; display:block; margin:auto;">
