@@ -14,7 +14,7 @@ collection: portfolio
 
 - **5-finger design** with independently actuated fingers and thumb, enabling a wide range of grasps and gestures
 - **Servo-driven joints** connected via a tendon-based mechanism for compact, lightweight actuation
-- **3D-printed structure** using FDM printing (white PLA palm + black PLA finger segments) for rapid prototyping and iteration
+- **3D-printed structure** using FDM printing (white PETG palm + black PET-CF finger segments) for a balance of flexibility, strength, and rigidity
 - Modular connector wiring for easy sensor integration and control
 
 ### Motivation
