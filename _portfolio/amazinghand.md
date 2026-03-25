@@ -1,6 +1,6 @@
 ---
 title: "AmazingHand: Dexterous Robotic Hand"
-excerpt: "A 3D-printed dexterous robotic hand with independently actuated fingers, designed for dexterous manipulation research.<br/><img src='/images/amazinghand.jpg' style='max-width:500px;'>"
+excerpt: "A 3D-printed dexterous robotic hand with independently actuated fingers, designed for dexterous manipulation research.<br/><img src='/images/IMG_0037.jpeg' style='max-width:500px;'>"
 collection: portfolio
 ---
 
@@ -28,4 +28,4 @@ Currently under active development. Ongoing work includes:
 - Integration with motion capture glove for teleoperation
 - Tactile sensing on fingertips
 
-<img src="/images/amazinghand.jpg" alt="AmazingHand robotic hand prototype" style="max-width:600px; display:block; margin:auto;">
+<img src="/images/IMG_0037.jpeg" alt="AmazingHand robotic hand prototype" style="max-width:600px; display:block; margin:auto;">
