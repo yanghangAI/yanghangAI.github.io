@@ -6,6 +6,8 @@ collection: portfolio
 
 ## AmazingHand
 
+**GitHub:** [pollen-robotics/AmazingHand](https://github.com/pollen-robotics/AmazingHand)
+
 **AmazingHand** is a 3D-printed dexterous robotic hand designed for research in dexterous manipulation and human-robot interaction.
 
 ### Features
