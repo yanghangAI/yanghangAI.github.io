@@ -1,0 +1,117 @@
+/* Imagehide demo — scoped widget styles.
+   Everything is namespaced under .imagehide so it can't bleed into the rest
+   of the academic site. Page-level chrome (masthead, footer) keeps the
+   inherited Georgia + classic-blue look. */
+
+.imagehide {
+  margin: 1.5rem 0 0;
+}
+
+.imagehide__caveat {
+  font-style: italic;
+  color: #666;
+  font-size: 0.95rem;
+  margin: 0.8rem 0 1.2rem;
+}
+
+.imagehide__upload {
+  border: 1px dashed #aaa;
+  padding: 1rem;
+  text-align: center;
+  margin: 1rem 0;
+  background: #fafaf6;
+}
+.imagehide__upload.is-dragover { background: #f0ead8; border-color: #555; }
+.imagehide__upload input[type="file"] { font: inherit; }
+.imagehide__upload-sample {
+  display: inline-block; margin-top: 0.5rem; font-size: 0.95rem;
+}
+
+.imagehide__status {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 0.85rem;
+  color: #555;
+  margin: 0.5rem 0 1rem;
+}
+.imagehide__status .progress {
+  display: inline-block; width: 200px; height: 0.6rem; border: 1px solid #888;
+  vertical-align: middle; margin: 0 0.4rem;
+}
+.imagehide__status .progress > span {
+  display: block; height: 100%; background: #0645ad;
+  width: 0%; transition: width 0.2s ease;
+}
+.imagehide__status .warn { color: #b00020; }
+
+.imagehide__panels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+.imagehide__panel {
+  border: 1px solid #ccc;
+  background: #fff;
+}
+.imagehide__panel canvas {
+  display: block; width: 100%; height: auto; image-rendering: pixelated;
+}
+.imagehide__panel-label {
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+  text-align: center;
+  padding: 0.25rem;
+  color: #555;
+  border-top: 1px solid #ccc;
+}
+
+.imagehide__oneshot {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+  background: #f6f4ec;
+  padding: 0.6rem 0.8rem;
+  border-left: 3px solid #aaa;
+  white-space: pre-wrap;
+  margin: 0.5rem 0 1rem;
+}
+
+.imagehide__controls {
+  display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; align-items: center;
+  margin: 0.8rem 0;
+}
+.imagehide__controls label {
+  font-size: 0.92rem; cursor: pointer;
+}
+.imagehide__controls button {
+  font: inherit;
+  padding: 0.4rem 0.9rem; border: 1px solid #444; background: #fff; cursor: pointer;
+}
+.imagehide__controls button[disabled] { opacity: 0.5; cursor: not-allowed; }
+.imagehide__controls button.primary {
+  background: #0645ad; color: #fff; border-color: #0645ad;
+}
+
+.imagehide__results {
+  width: 100%; border-collapse: collapse;
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+}
+.imagehide__results th, .imagehide__results td {
+  text-align: left; padding: 0.35rem 0.7rem 0.35rem 0;
+  border-bottom: 1px solid #ddd; vertical-align: top;
+  font-variant-numeric: tabular-nums;
+}
+.imagehide__results th {
+  font-family: Georgia, serif; font-style: italic; font-weight: 400;
+  font-size: 0.92rem; color: #555;
+  border-bottom: 1px solid #888;
+}
+.imagehide__results td.num    { text-align: right; }
+.imagehide__results td.sig-ok { color: #1f6b1f; font-weight: 700; }
+.imagehide__results td.sig-no { color: #b00020; font-weight: 700; }
+.imagehide__results tr.queued td  { color: #999; }
+.imagehide__results tr.running td { color: #555; }
+
+@media (max-width: 700px) {
+  .imagehide__panels { grid-template-columns: 1fr; }
+}
