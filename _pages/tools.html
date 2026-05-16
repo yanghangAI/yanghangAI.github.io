@@ -1,0 +1,13 @@
+---
+layout: archive
+title: "Tools"
+permalink: /tools/
+lede: "Small things I built for myself, listed here in case they're useful to anyone else."
+---
+
+<ul class="entries">
+{% assign sorted = site.tools | sort: "date" | reverse %}
+{% for post in sorted %}
+  {% include tool-single.html %}
+{% endfor %}
+</ul>

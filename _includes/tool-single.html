@@ -1,0 +1,20 @@
+<li class="entry">
+  <div class="entry__date">
+    {% if post.date %}{{ post.date | date: "%Y-%m" }}{% else %}—{% endif %}
+  </div>
+  <div class="entry__main">
+    <h3 class="entry__title">
+      {% if post.url contains '://' %}
+        <a href="{{ post.url }}">{{ post.title }}</a>
+      {% else %}
+        <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
+      {% endif %}
+      {% if post.status and post.status != 'live' %}
+        <span class="entry__meta"><em>{{ post.status }}</em></span>
+      {% endif %}
+    </h3>
+    {% if post.summary %}
+      <p class="entry__excerpt">{{ post.summary }}</p>
+    {% endif %}
+  </div>
+</li>
