@@ -1,0 +1,1196 @@
+{
+  "updated_utc": "2026-05-16T12:45:49Z",
+  "user": "hangyang_umass_edu",
+  "squeue": [
+    {
+      "jobid": "57755575",
+      "partition": "gpu-preempt",
+      "name": "1024noamp_idea082_design004",
+      "state": "RUNNING",
+      "time": "10:57",
+      "time_limit": "12:00:00",
+      "nodes": "1",
+      "nodelist": "ials-gpu013"
+    },
+    {
+      "jobid": "57755576",
+      "partition": "gpu-preempt",
+      "name": "1024noamp_idea082_design007",
+      "state": "RUNNING",
+      "time": "10:57",
+      "time_limit": "12:00:00",
+      "nodes": "1",
+      "nodelist": "ials-gpu014"
+    },
+    {
+      "jobid": "57755577",
+      "partition": "gpu-preempt",
+      "name": "1024noamp_idea082_design010",
+      "state": "RUNNING",
+      "time": "10:57",
+      "time_limit": "12:00:00",
+      "nodes": "1",
+      "nodelist": "ials-gpu014"
+    },
+    {
+      "jobid": "57755578",
+      "partition": "gpu-preempt",
+      "name": "1024noamp_idea082_design011",
+      "state": "RUNNING",
+      "time": "10:57",
+      "time_limit": "12:00:00",
+      "nodes": "1",
+      "nodelist": "ials-gpu017"
+    },
+    {
+      "jobid": "57755579",
+      "partition": "gpu-preempt",
+      "name": "1024noamp_idea082_design012",
+      "state": "RUNNING",
+      "time": "10:57",
+      "time_limit": "12:00:00",
+      "nodes": "1",
+      "nodelist": "ials-gpu017"
+    },
+    {
+      "jobid": "57755580",
+      "partition": "gpu-preempt",
+      "name": "1024noamp_idea084_design001",
+      "state": "RUNNING",
+      "time": "10:57",
+      "time_limit": "12:00:00",
+      "nodes": "1",
+      "nodelist": "ials-gpu017"
+    },
+    {
+      "jobid": "57755581",
+      "partition": "gpu-preempt",
+      "name": "1024noamp_idea090_design001",
+      "state": "RUNNING",
+      "time": "10:57",
+      "time_limit": "12:00:00",
+      "nodes": "1",
+      "nodelist": "ials-gpu017"
+    },
+    {
+      "jobid": "57755582",
+      "partition": "gpu-preempt",
+      "name": "1024noamp_idea090_design003",
+      "state": "RUNNING",
+      "time": "10:57",
+      "time_limit": "12:00:00",
+      "nodes": "1",
+      "nodelist": "ials-gpu017"
+    },
+    {
+      "jobid": "57755583",
+      "partition": "gpu-preempt",
+      "name": "1024noamp_idea094_design001",
+      "state": "RUNNING",
+      "time": "10:57",
+      "time_limit": "12:00:00",
+      "nodes": "1",
+      "nodelist": "ials-gpu017"
+    },
+    {
+      "jobid": "57755584",
+      "partition": "gpu-preempt",
+      "name": "1024noamp_idea094_design002",
+      "state": "RUNNING",
+      "time": "10:57",
+      "time_limit": "12:00:00",
+      "nodes": "1",
+      "nodelist": "ials-gpu021"
+    },
+    {
+      "jobid": "57755585",
+      "partition": "gpu-preempt",
+      "name": "1024noamp_idea094_design003",
+      "state": "RUNNING",
+      "time": "10:57",
+      "time_limit": "12:00:00",
+      "nodes": "1",
+      "nodelist": "ials-gpu021"
+    },
+    {
+      "jobid": "57755586",
+      "partition": "gpu-preempt",
+      "name": "1024noamp_idea095_design001",
+      "state": "RUNNING",
+      "time": "10:57",
+      "time_limit": "12:00:00",
+      "nodes": "1",
+      "nodelist": "ials-gpu023"
+    },
+    {
+      "jobid": "57755587",
+      "partition": "gpu-preempt",
+      "name": "1024noamp_idea095_design002",
+      "state": "RUNNING",
+      "time": "10:57",
+      "time_limit": "12:00:00",
+      "nodes": "1",
+      "nodelist": "ials-gpu023"
+    },
+    {
+      "jobid": "57755588",
+      "partition": "gpu-preempt",
+      "name": "1024noamp_idea096_design002",
+      "state": "RUNNING",
+      "time": "10:57",
+      "time_limit": "12:00:00",
+      "nodes": "1",
+      "nodelist": "ials-gpu023"
+    },
+    {
+      "jobid": "57755589",
+      "partition": "gpu-preempt",
+      "name": "1024noamp_idea096_design003",
+      "state": "RUNNING",
+      "time": "10:57",
+      "time_limit": "12:00:00",
+      "nodes": "1",
+      "nodelist": "ials-gpu023"
+    },
+    {
+      "jobid": "57755590",
+      "partition": "gpu-preempt",
+      "name": "1024noamp_idea097_design001",
+      "state": "RUNNING",
+      "time": "10:57",
+      "time_limit": "12:00:00",
+      "nodes": "1",
+      "nodelist": "ials-gpu023"
+    },
+    {
+      "jobid": "57755591",
+      "partition": "gpu-preempt",
+      "name": "1024noamp_idea098_design001",
+      "state": "RUNNING",
+      "time": "10:57",
+      "time_limit": "12:00:00",
+      "nodes": "1",
+      "nodelist": "ials-gpu023"
+    },
+    {
+      "jobid": "57755241",
+      "partition": "gpu-preempt",
+      "name": "1024noamp_idea096_d001",
+      "state": "RUNNING",
+      "time": "1:39:07",
+      "time_limit": "12:00:00",
+      "nodes": "1",
+      "nodelist": "ials-gpu013"
+    }
+  ],
+  "sacct_recent": [
+    {
+      "jobid": "57755591",
+      "name": "1024noamp_idea098_design001",
+      "partition": "gpu-preempt",
+      "state": "RUNNING",
+      "elapsed": "00:10:57",
+      "end": "Unknown",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57755590",
+      "name": "1024noamp_idea097_design001",
+      "partition": "gpu-preempt",
+      "state": "RUNNING",
+      "elapsed": "00:10:57",
+      "end": "Unknown",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57755589",
+      "name": "1024noamp_idea096_design003",
+      "partition": "gpu-preempt",
+      "state": "RUNNING",
+      "elapsed": "00:10:57",
+      "end": "Unknown",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57755588",
+      "name": "1024noamp_idea096_design002",
+      "partition": "gpu-preempt",
+      "state": "RUNNING",
+      "elapsed": "00:10:57",
+      "end": "Unknown",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57755587",
+      "name": "1024noamp_idea095_design002",
+      "partition": "gpu-preempt",
+      "state": "RUNNING",
+      "elapsed": "00:10:57",
+      "end": "Unknown",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57755586",
+      "name": "1024noamp_idea095_design001",
+      "partition": "gpu-preempt",
+      "state": "RUNNING",
+      "elapsed": "00:10:57",
+      "end": "Unknown",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57755585",
+      "name": "1024noamp_idea094_design003",
+      "partition": "gpu-preempt",
+      "state": "RUNNING",
+      "elapsed": "00:10:57",
+      "end": "Unknown",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57755584",
+      "name": "1024noamp_idea094_design002",
+      "partition": "gpu-preempt",
+      "state": "RUNNING",
+      "elapsed": "00:10:57",
+      "end": "Unknown",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57755583",
+      "name": "1024noamp_idea094_design001",
+      "partition": "gpu-preempt",
+      "state": "RUNNING",
+      "elapsed": "00:10:57",
+      "end": "Unknown",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57755582",
+      "name": "1024noamp_idea090_design003",
+      "partition": "gpu-preempt",
+      "state": "RUNNING",
+      "elapsed": "00:10:57",
+      "end": "Unknown",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57755581",
+      "name": "1024noamp_idea090_design001",
+      "partition": "gpu-preempt",
+      "state": "RUNNING",
+      "elapsed": "00:10:57",
+      "end": "Unknown",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57755580",
+      "name": "1024noamp_idea084_design001",
+      "partition": "gpu-preempt",
+      "state": "RUNNING",
+      "elapsed": "00:10:57",
+      "end": "Unknown",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57755579",
+      "name": "1024noamp_idea082_design012",
+      "partition": "gpu-preempt",
+      "state": "RUNNING",
+      "elapsed": "00:10:57",
+      "end": "Unknown",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57755578",
+      "name": "1024noamp_idea082_design011",
+      "partition": "gpu-preempt",
+      "state": "RUNNING",
+      "elapsed": "00:10:57",
+      "end": "Unknown",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57755577",
+      "name": "1024noamp_idea082_design010",
+      "partition": "gpu-preempt",
+      "state": "RUNNING",
+      "elapsed": "00:10:57",
+      "end": "Unknown",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57755576",
+      "name": "1024noamp_idea082_design007",
+      "partition": "gpu-preempt",
+      "state": "RUNNING",
+      "elapsed": "00:10:57",
+      "end": "Unknown",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57755575",
+      "name": "1024noamp_idea082_design004",
+      "partition": "gpu-preempt",
+      "state": "RUNNING",
+      "elapsed": "00:10:57",
+      "end": "Unknown",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57755361",
+      "name": "exp0-inn-idea084-d001-full",
+      "partition": "gpu-preempt",
+      "state": "FAILED",
+      "elapsed": "00:00:08",
+      "end": "2026-05-16T11:42:04",
+      "exit_code": "1:0"
+    },
+    {
+      "jobid": "57755244",
+      "name": "eval-phash-v2-mres",
+      "partition": "gpu-preempt",
+      "state": "COMPLETED",
+      "elapsed": "00:08:11",
+      "end": "2026-05-16T11:15:24",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57755242",
+      "name": "eval-phash-v2-best",
+      "partition": "gpu-preempt",
+      "state": "COMPLETED",
+      "elapsed": "00:01:22",
+      "end": "2026-05-16T11:08:04",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57755241",
+      "name": "1024noamp_idea096_d001",
+      "partition": "gpu-preempt",
+      "state": "RUNNING",
+      "elapsed": "01:39:07",
+      "end": "Unknown",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57754257",
+      "name": "idea097-design009",
+      "partition": "gpu-preempt",
+      "state": "COMPLETED",
+      "elapsed": "02:58:56",
+      "end": "2026-05-16T10:52:25",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57754256",
+      "name": "idea097-design008",
+      "partition": "gpu-preempt",
+      "state": "COMPLETED",
+      "elapsed": "02:59:11",
+      "end": "2026-05-16T10:52:40",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57754255",
+      "name": "idea097-design007",
+      "partition": "gpu-preempt",
+      "state": "COMPLETED",
+      "elapsed": "02:56:56",
+      "end": "2026-05-16T10:50:25",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57754217",
+      "name": "autohide_test",
+      "partition": "gpu-preempt",
+      "state": "COMPLETED",
+      "elapsed": "00:01:14",
+      "end": "2026-05-16T07:49:16",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57754199",
+      "name": "autohide_test",
+      "partition": "gpu-preempt",
+      "state": "FAILED",
+      "elapsed": "00:00:20",
+      "end": "2026-05-16T07:46:11",
+      "exit_code": "1:0"
+    },
+    {
+      "jobid": "57754198",
+      "name": "autohide_test",
+      "partition": "gpu-preempt",
+      "state": "COMPLETED",
+      "elapsed": "00:01:10",
+      "end": "2026-05-16T07:47:01",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57754197",
+      "name": "autohide_test",
+      "partition": "gpu-preempt",
+      "state": "COMPLETED",
+      "elapsed": "00:01:15",
+      "end": "2026-05-16T07:47:06",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57754051",
+      "name": "autohide_test",
+      "partition": "gpu-preempt",
+      "state": "CANCELLED by 5621",
+      "elapsed": "00:20:37",
+      "end": "2026-05-16T07:45:20",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57754050",
+      "name": "autohide_test",
+      "partition": "gpu-preempt",
+      "state": "CANCELLED by 5621",
+      "elapsed": "00:20:38",
+      "end": "2026-05-16T07:45:21",
+      "exit_code": "0:0"
+    }
+  ],
+  "sinfo": [
+    {
+      "partition": "arm",
+      "avail": "up",
+      "timelimit": "14-00:00:00",
+      "nodes": "6",
+      "state": "mix",
+      "cpus_aiot": "384/480/0/864"
+    },
+    {
+      "partition": "arm",
+      "avail": "up",
+      "timelimit": "14-00:00:00",
+      "nodes": "3",
+      "state": "idle",
+      "cpus_aiot": "0/240/0/240"
+    },
+    {
+      "partition": "arm-gpu",
+      "avail": "up",
+      "timelimit": "14-00:00:00",
+      "nodes": "4",
+      "state": "idle",
+      "cpus_aiot": "0/288/0/288"
+    },
+    {
+      "partition": "arm-preempt",
+      "avail": "up",
+      "timelimit": "14-00:00:00",
+      "nodes": "3",
+      "state": "idle",
+      "cpus_aiot": "0/240/0/240"
+    },
+    {
+      "partition": "astroth-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "8",
+      "state": "alloc",
+      "cpus_aiot": "240/0/0/240"
+    },
+    {
+      "partition": "astroth-gpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "3",
+      "state": "idle",
+      "cpus_aiot": "0/24/0/24"
+    },
+    {
+      "partition": "cbio-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "5",
+      "state": "mix",
+      "cpus_aiot": "391/249/0/640"
+    },
+    {
+      "partition": "cbio-gpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "1",
+      "state": "mix",
+      "cpus_aiot": "1/127/0/128"
+    },
+    {
+      "partition": "ceewater_casey-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "1",
+      "state": "mix-",
+      "cpus_aiot": "112/16/0/128"
+    },
+    {
+      "partition": "ceewater_casey-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "1",
+      "state": "comp",
+      "cpus_aiot": "81/47/0/128"
+    },
+    {
+      "partition": "ceewater_casey-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "1",
+      "state": "resv",
+      "cpus_aiot": "0/128/0/128"
+    },
+    {
+      "partition": "ceewater_casey-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "7",
+      "state": "mix",
+      "cpus_aiot": "146/22/0/168"
+    },
+    {
+      "partition": "ceewater_cjgleason-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "1",
+      "state": "mix-",
+      "cpus_aiot": "112/16/0/128"
+    },
+    {
+      "partition": "ceewater_cjgleason-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "1",
+      "state": "comp",
+      "cpus_aiot": "81/47/0/128"
+    },
+    {
+      "partition": "ceewater_cjgleason-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "1",
+      "state": "resv",
+      "cpus_aiot": "0/128/0/128"
+    },
+    {
+      "partition": "ceewater_cjgleason-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "7",
+      "state": "mix",
+      "cpus_aiot": "146/22/0/168"
+    },
+    {
+      "partition": "ceewater_kandread-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "1",
+      "state": "mix-",
+      "cpus_aiot": "112/16/0/128"
+    },
+    {
+      "partition": "ceewater_kandread-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "1",
+      "state": "comp",
+      "cpus_aiot": "81/47/0/128"
+    },
+    {
+      "partition": "ceewater_kandread-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "1",
+      "state": "resv",
+      "cpus_aiot": "0/128/0/128"
+    },
+    {
+      "partition": "ceewater_kandread-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "7",
+      "state": "mix",
+      "cpus_aiot": "146/22/0/168"
+    },
+    {
+      "partition": "cpu*",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "12",
+      "state": "mix-",
+      "cpus_aiot": "198/282/0/480"
+    },
+    {
+      "partition": "cpu*",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "1",
+      "state": "drng@",
+      "cpus_aiot": "2/0/62/64"
+    },
+    {
+      "partition": "cpu*",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "1",
+      "state": "down*",
+      "cpus_aiot": "0/0/40/40"
+    },
+    {
+      "partition": "cpu*",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "11",
+      "state": "comp",
+      "cpus_aiot": "1032/696/0/1728"
+    },
+    {
+      "partition": "cpu*",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "77",
+      "state": "mix",
+      "cpus_aiot": "3051/1709/0/4760"
+    },
+    {
+      "partition": "cpu*",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "38",
+      "state": "alloc",
+      "cpus_aiot": "2044/0/0/2044"
+    },
+    {
+      "partition": "cpu-preempt",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "9",
+      "state": "mix-",
+      "cpus_aiot": "551/377/0/928"
+    },
+    {
+      "partition": "cpu-preempt",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "1",
+      "state": "drain*",
+      "cpus_aiot": "0/0/36/36"
+    },
+    {
+      "partition": "cpu-preempt",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "4",
+      "state": "comp",
+      "cpus_aiot": "261/187/0/448"
+    },
+    {
+      "partition": "cpu-preempt",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "1",
+      "state": "resv",
+      "cpus_aiot": "0/128/0/128"
+    },
+    {
+      "partition": "cpu-preempt",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "88",
+      "state": "mix",
+      "cpus_aiot": "2920/2120/0/5040"
+    },
+    {
+      "partition": "cpu-preempt",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "69",
+      "state": "alloc",
+      "cpus_aiot": "4184/0/0/4184"
+    },
+    {
+      "partition": "ece-gpu",
+      "avail": "up",
+      "timelimit": "5-00:00:00",
+      "nodes": "2",
+      "state": "alloc",
+      "cpus_aiot": "64/0/0/64"
+    },
+    {
+      "partition": "fsi-lab",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "1",
+      "state": "mix-",
+      "cpus_aiot": "96/96/0/192"
+    },
+    {
+      "partition": "gaoseismolab-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "1",
+      "state": "mix-",
+      "cpus_aiot": "53/11/0/64"
+    },
+    {
+      "partition": "gaoseismolab-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "2",
+      "state": "mix",
+      "cpus_aiot": "120/8/0/128"
+    },
+    {
+      "partition": "gaoseismolab-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "2",
+      "state": "alloc",
+      "cpus_aiot": "128/0/0/128"
+    },
+    {
+      "partition": "gpu",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "1",
+      "state": "inval",
+      "cpus_aiot": "0/0/24/24"
+    },
+    {
+      "partition": "gpu",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "5",
+      "state": "mix-",
+      "cpus_aiot": "245/219/0/464"
+    },
+    {
+      "partition": "gpu",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "1",
+      "state": "drain*",
+      "cpus_aiot": "0/0/24/24"
+    },
+    {
+      "partition": "gpu",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "1",
+      "state": "drng",
+      "cpus_aiot": "0/0/64/64"
+    },
+    {
+      "partition": "gpu",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "90",
+      "state": "mix",
+      "cpus_aiot": "875/997/0/1872"
+    },
+    {
+      "partition": "gpu",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "41",
+      "state": "alloc",
+      "cpus_aiot": "764/0/0/764"
+    },
+    {
+      "partition": "gpu",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "16",
+      "state": "idle",
+      "cpus_aiot": "0/316/0/316"
+    },
+    {
+      "partition": "gpu-preempt",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "1",
+      "state": "drng@",
+      "cpus_aiot": "10/0/22/32"
+    },
+    {
+      "partition": "gpu-preempt",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "17",
+      "state": "mix-",
+      "cpus_aiot": "565/875/0/1440"
+    },
+    {
+      "partition": "gpu-preempt",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "2",
+      "state": "plnd",
+      "cpus_aiot": "0/128/0/128"
+    },
+    {
+      "partition": "gpu-preempt",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "5",
+      "state": "drain*",
+      "cpus_aiot": "0/0/120/120"
+    },
+    {
+      "partition": "gpu-preempt",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "1",
+      "state": "drng",
+      "cpus_aiot": "16/0/8/24"
+    },
+    {
+      "partition": "gpu-preempt",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "3",
+      "state": "drain",
+      "cpus_aiot": "0/0/72/72"
+    },
+    {
+      "partition": "gpu-preempt",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "44",
+      "state": "mix",
+      "cpus_aiot": "966/1010/0/1976"
+    },
+    {
+      "partition": "gpu-preempt",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "5",
+      "state": "alloc",
+      "cpus_aiot": "144/0/0/144"
+    },
+    {
+      "partition": "superpod-a100",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "8",
+      "state": "mix-",
+      "cpus_aiot": "428/468/0/896"
+    },
+    {
+      "partition": "superpod-a100",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "4",
+      "state": "mix",
+      "cpus_aiot": "292/156/0/448"
+    },
+    {
+      "partition": "gpupod-l40s",
+      "avail": "up",
+      "timelimit": "14-00:00:00",
+      "nodes": "1",
+      "state": "drng@",
+      "cpus_aiot": "10/0/22/32"
+    },
+    {
+      "partition": "gpupod-l40s",
+      "avail": "up",
+      "timelimit": "14-00:00:00",
+      "nodes": "1",
+      "state": "mix-",
+      "cpus_aiot": "7/25/0/32"
+    },
+    {
+      "partition": "gpupod-l40s",
+      "avail": "up",
+      "timelimit": "14-00:00:00",
+      "nodes": "11",
+      "state": "mix",
+      "cpus_aiot": "124/228/0/352"
+    },
+    {
+      "partition": "gpupod-l40s",
+      "avail": "up",
+      "timelimit": "14-00:00:00",
+      "nodes": "1",
+      "state": "alloc",
+      "cpus_aiot": "32/0/0/32"
+    },
+    {
+      "partition": "ials-gpu",
+      "avail": "up",
+      "timelimit": "14-00:00:00",
+      "nodes": "5",
+      "state": "drain*",
+      "cpus_aiot": "0/0/120/120"
+    },
+    {
+      "partition": "ials-gpu",
+      "avail": "up",
+      "timelimit": "14-00:00:00",
+      "nodes": "1",
+      "state": "drng",
+      "cpus_aiot": "16/0/8/24"
+    },
+    {
+      "partition": "ials-gpu",
+      "avail": "up",
+      "timelimit": "14-00:00:00",
+      "nodes": "3",
+      "state": "drain",
+      "cpus_aiot": "0/0/72/72"
+    },
+    {
+      "partition": "ials-gpu",
+      "avail": "up",
+      "timelimit": "14-00:00:00",
+      "nodes": "17",
+      "state": "mix",
+      "cpus_aiot": "187/221/0/408"
+    },
+    {
+      "partition": "ials-gpu",
+      "avail": "up",
+      "timelimit": "14-00:00:00",
+      "nodes": "2",
+      "state": "alloc",
+      "cpus_aiot": "48/0/0/48"
+    },
+    {
+      "partition": "jdelhommelle",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "1",
+      "state": "mix-",
+      "cpus_aiot": "69/155/0/224"
+    },
+    {
+      "partition": "lan",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "1",
+      "state": "mix",
+      "cpus_aiot": "4/28/0/32"
+    },
+    {
+      "partition": "mpi",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "3",
+      "state": "mix",
+      "cpus_aiot": "41/151/0/192"
+    },
+    {
+      "partition": "mpi",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "1",
+      "state": "resv",
+      "cpus_aiot": "0/64/0/64"
+    },
+    {
+      "partition": "mpi",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "17",
+      "state": "alloc",
+      "cpus_aiot": "1088/0/0/1088"
+    },
+    {
+      "partition": "ood-shared",
+      "avail": "up",
+      "timelimit": "8:00:00",
+      "nodes": "1",
+      "state": "mix",
+      "cpus_aiot": "4/20/0/24"
+    },
+    {
+      "partition": "ood-shared",
+      "avail": "up",
+      "timelimit": "8:00:00",
+      "nodes": "4",
+      "state": "idle",
+      "cpus_aiot": "0/96/0/96"
+    },
+    {
+      "partition": "power9",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "2",
+      "state": "idle",
+      "cpus_aiot": "0/64/0/64"
+    },
+    {
+      "partition": "power9-gpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "16",
+      "state": "idle",
+      "cpus_aiot": "0/576/0/576"
+    },
+    {
+      "partition": "power9-gpu-osg",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "2",
+      "state": "idle",
+      "cpus_aiot": "0/64/0/64"
+    },
+    {
+      "partition": "power9-gpu-preempt",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "16",
+      "state": "idle",
+      "cpus_aiot": "0/576/0/576"
+    },
+    {
+      "partition": "toltec-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "6",
+      "state": "mix",
+      "cpus_aiot": "155/37/0/192"
+    },
+    {
+      "partition": "toltec-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "1",
+      "state": "alloc",
+      "cpus_aiot": "32/0/0/32"
+    },
+    {
+      "partition": "umd-cscdr-arm",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "3",
+      "state": "idle",
+      "cpus_aiot": "0/240/0/240"
+    },
+    {
+      "partition": "umd-cscdr-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "1",
+      "state": "mix-",
+      "cpus_aiot": "32/32/0/64"
+    },
+    {
+      "partition": "umd-cscdr-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "1",
+      "state": "comp",
+      "cpus_aiot": "32/32/0/64"
+    },
+    {
+      "partition": "umd-cscdr-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "20",
+      "state": "mix",
+      "cpus_aiot": "710/570/0/1280"
+    },
+    {
+      "partition": "umd-cscdr-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "13",
+      "state": "alloc",
+      "cpus_aiot": "832/0/0/832"
+    },
+    {
+      "partition": "umd-cscdr-gpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "4",
+      "state": "mix-",
+      "cpus_aiot": "49/271/0/320"
+    },
+    {
+      "partition": "umd-cscdr-gpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "6",
+      "state": "mix",
+      "cpus_aiot": "265/119/0/384"
+    },
+    {
+      "partition": "visterra",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "1",
+      "state": "mix",
+      "cpus_aiot": "45/3/0/48"
+    },
+    {
+      "partition": "visterra",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "6",
+      "state": "alloc",
+      "cpus_aiot": "288/0/0/288"
+    },
+    {
+      "partition": "workflow",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "1",
+      "state": "mix",
+      "cpus_aiot": "4/20/0/24"
+    },
+    {
+      "partition": "workflow",
+      "avail": "up",
+      "timelimit": "2-00:00:00",
+      "nodes": "4",
+      "state": "idle",
+      "cpus_aiot": "0/96/0/96"
+    },
+    {
+      "partition": "zhoulin-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "2",
+      "state": "comp",
+      "cpus_aiot": "148/108/0/256"
+    },
+    {
+      "partition": "zhoulin-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "3",
+      "state": "mix",
+      "cpus_aiot": "296/88/0/384"
+    },
+    {
+      "partition": "zhoulin-cpu",
+      "avail": "up",
+      "timelimit": "30-00:00:00",
+      "nodes": "1",
+      "state": "alloc",
+      "cpus_aiot": "128/0/0/128"
+    }
+  ],
+  "quota": [
+    {
+      "path": "/home/hangyang_umass_edu",
+      "total_gb": 100.0,
+      "used_gb": 69.6,
+      "free_gb": 30.4,
+      "percent": 69.6
+    },
+    {
+      "path": "/work/pi_nwycoff_umass_edu/hang",
+      "total_gb": 1000.0,
+      "used_gb": 758.7,
+      "free_gb": 241.3,
+      "percent": 75.9
+    }
+  ]
+}

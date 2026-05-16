@@ -1,0 +1,135 @@
+---
+layout: archive
+title: "Cluster Dashboard"
+permalink: /cluster/
+author_profile: true
+---
+
+<p>Live snapshot of my jobs and node availability on the UMass Unity HPC cluster.
+Data is collected on the cluster every 15 minutes and pushed to this repo; the page also
+auto-refreshes the fetch every 60 seconds.</p>
+
+<p>
+  <strong>Last updated:</strong> <span id="cd-updated">loading…</span> &nbsp;
+  <strong>User:</strong> <span id="cd-user">—</span> &nbsp;
+  <button id="cd-refresh" type="button" style="cursor:pointer">refresh</button>
+</p>
+
+<h2 id="cd-h-squeue">Active jobs (squeue --me) <span id="cd-count-squeue" style="color:#888;font-weight:normal"></span></h2>
+<div id="cd-squeue">loading…</div>
+
+<h2>Recent jobs (last 24h)</h2>
+<div id="cd-sacct">loading…</div>
+
+<h2>Storage</h2>
+<div id="cd-quota">loading…</div>
+
+<h2>Partitions (sinfo)</h2>
+<div id="cd-sinfo">loading…</div>
+
+<style>
+  .cd-table { border-collapse: collapse; width: 100%; font-size: 0.88em; margin: 0.4em 0 1.2em; }
+  .cd-table th, .cd-table td { border: 1px solid #ddd; padding: 4px 8px; text-align: left; }
+  .cd-table th { background: #f4f4f4; }
+  .cd-table tr:nth-child(even) td { background: #fafafa; }
+  .cd-state-RUNNING   { color: #1a7f37; font-weight: 600; }
+  .cd-state-PENDING   { color: #9a6700; font-weight: 600; }
+  .cd-state-COMPLETED { color: #1a7f37; }
+  .cd-state-FAILED    { color: #cf222e; font-weight: 600; }
+  .cd-state-CANCELLED { color: #6e7781; }
+  .cd-state-TIMEOUT   { color: #cf222e; }
+  .cd-empty { color: #888; font-style: italic; }
+  .cd-bar { display:inline-block; width:120px; height:10px; background:#eee; border:1px solid #ccc; vertical-align:middle; }
+  .cd-bar > span { display:block; height:100%; background:#1f6feb; }
+</style>
+
+<script>
+(function () {
+  // Cache-bust so the browser doesn't serve stale JSON between cron pushes.
+  const DATA_URL = "{{ '/assets/cluster-data.json' | relative_url }}";
+  const REFRESH_MS = 60 * 1000;
+
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
+
+  function table(cols, rows, opts) {
+    if (!rows || rows.length === 0) {
+      return `<p class="cd-empty">${esc((opts && opts.empty) || "none")}</p>`;
+    }
+    const head = cols.map(c => `<th>${esc(c.label)}</th>`).join("");
+    const body = rows.map(r => "<tr>" + cols.map(c => {
+      const v = c.render ? c.render(r) : esc(r[c.key]);
+      return `<td>${v}</td>`;
+    }).join("") + "</tr>").join("");
+    return `<table class="cd-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  }
+
+  function stateCell(r) {
+    const s = String(r.state || "").split(" ")[0]; // strip "CANCELLED by ..."
+    return `<span class="cd-state-${esc(s)}">${esc(r.state)}</span>`;
+  }
+
+  function render(data) {
+    document.getElementById("cd-updated").textContent =
+      data.updated_utc + " (" + new Date(data.updated_utc).toLocaleString() + ")";
+    document.getElementById("cd-user").textContent = data.user || "—";
+
+    const sq = data.squeue || [];
+    document.getElementById("cd-count-squeue").textContent =
+      sq.length ? `(${sq.length} job${sq.length===1?"":"s"})` : "(none)";
+    document.getElementById("cd-squeue").innerHTML = table([
+      { key: "jobid",     label: "JobID" },
+      { key: "partition", label: "Partition" },
+      { key: "name",      label: "Name" },
+      { key: "state",     label: "State", render: stateCell },
+      { key: "time",      label: "Time" },
+      { key: "time_limit",label: "Limit" },
+      { key: "nodes",     label: "Nodes" },
+      { key: "nodelist",  label: "Nodelist / Reason" },
+    ], sq, { empty: "No active jobs." });
+
+    document.getElementById("cd-sacct").innerHTML = table([
+      { key: "jobid",     label: "JobID" },
+      { key: "name",      label: "Name" },
+      { key: "partition", label: "Partition" },
+      { key: "state",     label: "State", render: stateCell },
+      { key: "elapsed",   label: "Elapsed" },
+      { key: "end",       label: "End" },
+      { key: "exit_code", label: "Exit" },
+    ], data.sacct_recent, { empty: "No jobs in the last 24h." });
+
+    document.getElementById("cd-quota").innerHTML = table([
+      { key: "path",     label: "Path" },
+      { key: "used_gb",  label: "Used (GB)" },
+      { key: "total_gb", label: "Total (GB)" },
+      { key: "free_gb",  label: "Free (GB)" },
+      { key: "percent",  label: "Used %",
+        render: r => r.percent == null ? "—" :
+          `<span class="cd-bar"><span style="width:${Math.min(100, r.percent)}%"></span></span> ${esc(r.percent)}%` },
+    ], data.quota, { empty: "No storage info." });
+
+    document.getElementById("cd-sinfo").innerHTML = table([
+      { key: "partition", label: "Partition" },
+      { key: "avail",     label: "Avail" },
+      { key: "timelimit", label: "Time Limit" },
+      { key: "nodes",     label: "Nodes" },
+      { key: "state",     label: "State" },
+      { key: "cpus_aiot", label: "CPUs (A/I/O/T)" },
+    ], data.sinfo, { empty: "No partition info." });
+  }
+
+  function load() {
+    fetch(DATA_URL + "?t=" + Date.now(), { cache: "no-store" })
+      .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(render)
+      .catch(err => {
+        document.getElementById("cd-updated").textContent = "error: " + err.message;
+      });
+  }
+
+  document.getElementById("cd-refresh").addEventListener("click", load);
+  load();
+  setInterval(load, REFRESH_MS);
+})();
+</script>
