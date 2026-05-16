@@ -1,57 +1,83 @@
 ---
 layout: archive
-title: "Cluster Dashboard"
+title: "Cluster"
 permalink: /cluster/
-author_profile: true
+hide_title: true
+kicker: "Live · UMass Unity HPC"
 ---
 
-<p>Live snapshot of my jobs and node availability on the UMass Unity HPC cluster.
-Data is collected on the cluster every 15 minutes and pushed to this repo; the page also
-auto-refreshes the fetch every 60 seconds.</p>
+<div class="cd-dash">
 
-<p>
-  <strong>Last updated:</strong> <span id="cd-updated">loading…</span> &nbsp;
-  <strong>User:</strong> <span id="cd-user">—</span> &nbsp;
-  <button id="cd-refresh" type="button" style="cursor:pointer">refresh</button>
-</p>
+  <div class="cd-hero">
+    <p class="cd-hero__num">
+      <span id="cd-count">—</span>
+      <span class="unit">Jobs in queue</span>
+    </p>
+    <dl class="cd-hero__meta">
+      <dt>User</dt>          <dd id="cd-user">—</dd>
+      <dt>Last sync</dt>     <dd id="cd-updated">loading…</dd>
+      <dt>Refresh</dt>       <dd>auto · 60s · <button id="cd-refresh" class="cd-refresh" type="button">Sync now</button></dd>
+      <dt>Source</dt>        <dd>cron → git push every 15&nbsp;min</dd>
+    </dl>
+  </div>
 
-<h2 id="cd-h-squeue">Active jobs (squeue --me) <span id="cd-count-squeue" style="color:#888;font-weight:normal"></span></h2>
-<div id="cd-squeue">loading…</div>
+  <p class="cd-statline">
+    <span class="live"><span class="dot"></span> Live snapshot</span>
+    <span><strong id="cd-running">0</strong> running</span>
+    <span><strong id="cd-pending">0</strong> pending</span>
+    <span><strong id="cd-done24">0</strong> completed · 24h</span>
+    <span><strong id="cd-failed24">0</strong> failed · 24h</span>
+  </p>
 
-<h2>Recent jobs (last 24h)</h2>
-<div id="cd-sacct">loading…</div>
+  <section class="cd-section">
+    <div class="cd-section__head">
+      <div class="cd-section__num">01 / squeue --me</div>
+      <h2 class="cd-section__title">Active <em>jobs</em></h2>
+    </div>
+    <div id="cd-squeue">loading…</div>
+  </section>
 
-<h2>Storage</h2>
-<div id="cd-quota">loading…</div>
+  <section class="cd-section">
+    <div class="cd-section__head">
+      <div class="cd-section__num">02 / sacct · last 24h</div>
+      <h2 class="cd-section__title">Recent <em>jobs</em></h2>
+    </div>
+    <div id="cd-sacct">loading…</div>
+  </section>
 
-<h2>Partitions (sinfo)</h2>
-<div id="cd-sinfo">loading…</div>
+  <section class="cd-section">
+    <div class="cd-section__head">
+      <div class="cd-section__num">03 / df</div>
+      <h2 class="cd-section__title">Storage</h2>
+    </div>
+    <div id="cd-quota">loading…</div>
+  </section>
 
-<style>
-  .cd-table { border-collapse: collapse; width: 100%; font-size: 0.88em; margin: 0.4em 0 1.2em; }
-  .cd-table th, .cd-table td { border: 1px solid #ddd; padding: 4px 8px; text-align: left; }
-  .cd-table th { background: #f4f4f4; }
-  .cd-table tr:nth-child(even) td { background: #fafafa; }
-  .cd-state-RUNNING   { color: #1a7f37; font-weight: 600; }
-  .cd-state-PENDING   { color: #9a6700; font-weight: 600; }
-  .cd-state-COMPLETED { color: #1a7f37; }
-  .cd-state-FAILED    { color: #cf222e; font-weight: 600; }
-  .cd-state-CANCELLED { color: #6e7781; }
-  .cd-state-TIMEOUT   { color: #cf222e; }
-  .cd-empty { color: #888; font-style: italic; }
-  .cd-bar { display:inline-block; width:120px; height:10px; background:#eee; border:1px solid #ccc; vertical-align:middle; }
-  .cd-bar > span { display:block; height:100%; background:#1f6feb; }
-</style>
+  <section class="cd-section">
+    <div class="cd-section__head">
+      <div class="cd-section__num">04 / sinfo</div>
+      <h2 class="cd-section__title">Partitions</h2>
+    </div>
+    <div id="cd-sinfo">loading…</div>
+  </section>
+
+</div>
 
 <script>
 (function () {
-  // Cache-bust so the browser doesn't serve stale JSON between cron pushes.
   const DATA_URL = "{{ '/assets/cluster-data.json' | relative_url }}";
   const REFRESH_MS = 60 * 1000;
 
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
   }[c]));
+
+  function tape(percent) {
+    const cells = 24;
+    const filled = Math.max(0, Math.min(cells, Math.round((percent || 0) / 100 * cells)));
+    const empty  = cells - filled;
+    return `<span class="cd-tape"><span class="filled">${"▮".repeat(filled)}</span><span class="empty">${"▯".repeat(empty)}</span></span>`;
+  }
 
   function table(cols, rows, opts) {
     if (!rows || rows.length === 0) {
@@ -60,62 +86,83 @@ auto-refreshes the fetch every 60 seconds.</p>
     const head = cols.map(c => `<th>${esc(c.label)}</th>`).join("");
     const body = rows.map(r => "<tr>" + cols.map(c => {
       const v = c.render ? c.render(r) : esc(r[c.key]);
-      return `<td>${v}</td>`;
+      return `<td data-label="${esc(c.label)}">${v}</td>`;
     }).join("") + "</tr>").join("");
     return `<table class="cd-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
   }
 
   function stateCell(r) {
-    const s = String(r.state || "").split(" ")[0]; // strip "CANCELLED by ..."
-    return `<span class="cd-state-${esc(s)}">${esc(r.state)}</span>`;
+    const s = String(r.state || "").split(" ")[0];
+    return `<span class="cd-state ${esc(s)}">${esc(r.state)}</span>`;
+  }
+
+  function counts(data) {
+    const sq = data.squeue || [];
+    const sa = data.sacct_recent || [];
+    const c = { running: 0, pending: 0, done: 0, failed: 0 };
+    sq.forEach(j => {
+      if (j.state === "RUNNING") c.running++;
+      else if (j.state === "PENDING") c.pending++;
+    });
+    sa.forEach(j => {
+      const s = String(j.state || "").split(" ")[0];
+      if (s === "COMPLETED") c.done++;
+      else if (s === "FAILED" || s === "TIMEOUT" || s === "NODE_FAIL") c.failed++;
+    });
+    return c;
   }
 
   function render(data) {
-    document.getElementById("cd-updated").textContent =
-      data.updated_utc + " (" + new Date(data.updated_utc).toLocaleString() + ")";
-    document.getElementById("cd-user").textContent = data.user || "—";
-
     const sq = data.squeue || [];
-    document.getElementById("cd-count-squeue").textContent =
-      sq.length ? `(${sq.length} job${sq.length===1?"":"s"})` : "(none)";
+    document.getElementById("cd-count").textContent = sq.length;
+    document.getElementById("cd-user").textContent  = data.user || "—";
+    const d = new Date(data.updated_utc);
+    document.getElementById("cd-updated").textContent =
+      isNaN(d) ? data.updated_utc : d.toLocaleString();
+
+    const c = counts(data);
+    document.getElementById("cd-running").textContent  = c.running;
+    document.getElementById("cd-pending").textContent  = c.pending;
+    document.getElementById("cd-done24").textContent   = c.done;
+    document.getElementById("cd-failed24").textContent = c.failed;
+
     document.getElementById("cd-squeue").innerHTML = table([
-      { key: "jobid",     label: "JobID" },
-      { key: "partition", label: "Partition" },
-      { key: "name",      label: "Name" },
-      { key: "state",     label: "State", render: stateCell },
-      { key: "time",      label: "Time" },
-      { key: "time_limit",label: "Limit" },
-      { key: "nodes",     label: "Nodes" },
-      { key: "nodelist",  label: "Nodelist / Reason" },
+      { key: "jobid",      label: "JobID",     render: r => `<span class="jobid">${esc(r.jobid)}</span>` },
+      { key: "partition",  label: "Partition" },
+      { key: "name",       label: "Name",      render: r => `<span class="name">${esc(r.name)}</span>` },
+      { key: "state",      label: "State",     render: stateCell },
+      { key: "time",       label: "Elapsed",   render: r => `<span class="num">${esc(r.time)}</span>` },
+      { key: "time_limit", label: "Limit",     render: r => `<span class="num">${esc(r.time_limit)}</span>` },
+      { key: "nodes",      label: "N",         render: r => `<span class="num">${esc(r.nodes)}</span>` },
+      { key: "nodelist",   label: "Node / Reason" },
     ], sq, { empty: "No active jobs." });
 
     document.getElementById("cd-sacct").innerHTML = table([
-      { key: "jobid",     label: "JobID" },
-      { key: "name",      label: "Name" },
+      { key: "jobid",     label: "JobID",     render: r => `<span class="jobid">${esc(r.jobid)}</span>` },
+      { key: "name",      label: "Name",      render: r => `<span class="name">${esc(r.name)}</span>` },
       { key: "partition", label: "Partition" },
-      { key: "state",     label: "State", render: stateCell },
-      { key: "elapsed",   label: "Elapsed" },
-      { key: "end",       label: "End" },
-      { key: "exit_code", label: "Exit" },
+      { key: "state",     label: "State",     render: stateCell },
+      { key: "elapsed",   label: "Elapsed",   render: r => `<span class="num">${esc(r.elapsed)}</span>` },
+      { key: "end",       label: "End",       render: r => `<span class="num">${esc(r.end)}</span>` },
+      { key: "exit_code", label: "Exit",      render: r => `<span class="num">${esc(r.exit_code)}</span>` },
     ], data.sacct_recent, { empty: "No jobs in the last 24h." });
 
     document.getElementById("cd-quota").innerHTML = table([
-      { key: "path",     label: "Path" },
-      { key: "used_gb",  label: "Used (GB)" },
-      { key: "total_gb", label: "Total (GB)" },
-      { key: "free_gb",  label: "Free (GB)" },
-      { key: "percent",  label: "Used %",
-        render: r => r.percent == null ? "—" :
-          `<span class="cd-bar"><span style="width:${Math.min(100, r.percent)}%"></span></span> ${esc(r.percent)}%` },
+      { key: "path",     label: "Path",      render: r => `<span class="name">${esc(r.path)}</span>` },
+      { key: "used_gb",  label: "Used (GB)", render: r => `<span class="num">${esc(r.used_gb)}</span>` },
+      { key: "total_gb", label: "Total (GB)",render: r => `<span class="num">${esc(r.total_gb)}</span>` },
+      { key: "free_gb",  label: "Free (GB)", render: r => `<span class="num">${esc(r.free_gb)}</span>` },
+      { key: "percent",  label: "Utilization",
+        render: r => r.percent == null ? "—" : `${tape(r.percent)} <span class="num">&nbsp;${esc(r.percent)}%</span>` },
     ], data.quota, { empty: "No storage info." });
 
     document.getElementById("cd-sinfo").innerHTML = table([
-      { key: "partition", label: "Partition" },
+      { key: "partition", label: "Partition", render: r => `<span class="jobid">${esc(r.partition)}</span>` },
       { key: "avail",     label: "Avail" },
-      { key: "timelimit", label: "Time Limit" },
-      { key: "nodes",     label: "Nodes" },
+      { key: "timelimit", label: "Time Limit", render: r => `<span class="num">${esc(r.timelimit)}</span>` },
+      { key: "nodes",     label: "Nodes",      render: r => `<span class="num">${esc(r.nodes)}</span>` },
       { key: "state",     label: "State" },
-      { key: "cpus_aiot", label: "CPUs (A/I/O/T)" },
+      { key: "cpus_aiot", label: "CPUs A/I/O/T", render: r => `<span class="num">${esc(r.cpus_aiot)}</span>` },
     ], data.sinfo, { empty: "No partition info." });
   }
 
@@ -124,7 +171,7 @@ auto-refreshes the fetch every 60 seconds.</p>
       .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
       .then(render)
       .catch(err => {
-        document.getElementById("cd-updated").textContent = "error: " + err.message;
+        document.getElementById("cd-updated").innerHTML = `<span class="cd-error">error: ${esc(err.message)}</span>`;
       });
   }
 

@@ -2,35 +2,34 @@
 layout: archive
 title: "Publications"
 permalink: /publications/
-author_profile: true
+kicker: "Peer-reviewed work"
+lede: "Selected papers in deep learning, image steganography, and medical imaging. Also indexed on Google Scholar."
 ---
 
 {% if site.author.googlescholar %}
-  <div class="wordwrap">You can also find my articles on <a href="{{site.author.googlescholar}}">my Google Scholar profile</a>.</div>
+<p style="margin-bottom:2.5rem;">
+  <a href="{{ site.author.googlescholar }}" class="tag" style="text-decoration:none;">View on Google Scholar ↗</a>
+</p>
 {% endif %}
 
-{% include base_path %}
-
-<!-- New style rendering if publication categories are defined -->
-{% if site.publication_category %}
-  {% for category in site.publication_category  %}
+{% if site.publication_category and site.publication_category.size > 0 %}
+  {% for category in site.publication_category %}
     {% assign title_shown = false %}
     {% for post in site.publications reversed %}
-      {% if post.category != category[0] %}
-        {% continue %}
-      {% endif %}
+      {% if post.category != category[0] %}{% continue %}{% endif %}
       {% unless title_shown %}
-        <h2>{{ category[1].title }}</h2><hr />
+        <h2>{{ category[1].title }}</h2>
+        <ul class="entries">
         {% assign title_shown = true %}
       {% endunless %}
       {% include archive-single.html %}
     {% endfor %}
+    {% if title_shown %}</ul>{% endif %}
   {% endfor %}
 {% else %}
+  <ul class="entries">
   {% for post in site.publications reversed %}
     {% include archive-single.html %}
   {% endfor %}
+  </ul>
 {% endif %}
-
-
-

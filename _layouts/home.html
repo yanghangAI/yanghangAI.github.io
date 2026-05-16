@@ -1,0 +1,52 @@
+---
+layout: default
+---
+<section class="hero">
+  <div class="hero__index">
+    <span>UMASS AMHERST</span>
+    <span>PhD · Mathematics</span>
+    <span>2024 → present</span>
+  </div>
+  <h1 class="hero__name">Hang<br>Y<em>a</em>ng</h1>
+  <p class="hero__lede">Machine learning, invertible networks, and robotics — for image steganography, medical imaging, and motion capture.</p>
+  <dl class="hero__role">
+    <dt>Affiliation</dt><dd>Department of Mathematics & Statistics, UMass Amherst</dd>
+    <dt>Advisor</dt><dd>Prof. Noam Wycoff</dd>
+    <dt>Reach</dt><dd><a href="mailto:hangyang@umass.edu">hangyang@umass.edu</a> · <a href="https://scholar.google.com/citations?user=usu8YBAAAAAJ">Scholar</a> · <a href="https://github.com/yanghangAI">GitHub</a></dd>
+  </dl>
+</section>
+
+<article class="prose">
+  {{ content }}
+</article>
+
+<section class="section">
+  <div class="section__head">
+    <div class="section__num">03 / Selected Publications</div>
+    <h2 class="section__title"><em>Recent</em> papers</h2>
+  </div>
+  <div class="section__body">
+    <ul class="entries">
+      {% for post in site.publications reversed limit:5 %}
+        {% include archive-single.html %}
+      {% endfor %}
+    </ul>
+    <p style="margin-top:1.5rem;"><a href="{{ '/publications/' | relative_url }}" class="tag" style="text-decoration:none;">All publications ↗</a></p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section__head">
+    <div class="section__num">04 / Reach</div>
+    <h2 class="section__title">Get in <em>touch</em></h2>
+  </div>
+  <div class="section__body register">
+    <dl>
+      <dt>Email</dt><dd><a href="mailto:hangyang@umass.edu">hangyang@umass.edu</a></dd>
+      <dt>Office</dt><dd>Lederle Graduate Research Tower, UMass Amherst</dd>
+      <dt>Scholar</dt><dd><a href="https://scholar.google.com/citations?user=usu8YBAAAAAJ">Hang Yang on Google Scholar</a></dd>
+      <dt>GitHub</dt><dd><a href="https://github.com/yanghangAI">@yanghangAI</a></dd>
+      <dt>HPC status</dt><dd><a href="{{ '/cluster/' | relative_url }}">/cluster · live SLURM dashboard</a></dd>
+    </dl>
+  </div>
+</section>
