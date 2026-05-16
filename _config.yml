@@ -74,5 +74,6 @@ exclude:
   - README.md
   - docs/
   - scripts/
+  - tests/
   - vendor/
   - node_modules/
