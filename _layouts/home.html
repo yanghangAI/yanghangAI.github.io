@@ -2,38 +2,21 @@
 layout: default
 ---
 <article class="page">
-  <section class="hero">
-    <h1 class="hero__name">Hang Yang</h1>
-    <p class="hero__lede">PhD candidate in Mathematics at the University of Massachusetts Amherst. I work on machine learning, invertible neural networks, and robotics — with applications in image steganography, medical imaging, and motion capture.</p>
-    <dl class="hero__role">
-      <dt>Affiliation</dt><dd>Department of Mathematics &amp; Statistics, UMass Amherst</dd>
-      <dt>Contact</dt><dd><a href="mailto:hangyang@umass.edu">hangyang@umass.edu</a> · <a href="https://scholar.google.com/citations?user=usu8YBAAAAAJ">Google Scholar</a> · <a href="https://github.com/yanghangAI">GitHub</a></dd>
-    </dl>
-  </section>
+  <h1>Hang Yang</h1>
+  <p>PhD candidate, Department of Mathematics &amp; Statistics, University of Massachusetts Amherst.</p>
+  <p>
+    <a href="mailto:hangyang@umass.edu">hangyang@umass.edu</a> ·
+    <a href="https://scholar.google.com/citations?user=usu8YBAAAAAJ">Google Scholar</a> ·
+    <a href="https://github.com/yanghangAI">GitHub</a>
+  </p>
 
-  <div class="prose">
-    {{ content }}
-  </div>
+  {{ content }}
 
-  <section class="section">
-    <h2 class="section__title">Selected publications</h2>
-    <ul class="entries">
-      {% for post in site.publications reversed limit:5 %}
-        {% include archive-single.html %}
-      {% endfor %}
-    </ul>
-    <p style="margin-top:0.75rem;"><a href="{{ '/publications/' | relative_url }}">All publications →</a></p>
-  </section>
-
-  <section class="section">
-    <h2 class="section__title">Contact</h2>
-    <div class="register">
-      <dl>
-        <dt>Email</dt><dd><a href="mailto:hangyang@umass.edu">hangyang@umass.edu</a></dd>
-        <dt>Office</dt><dd>Lederle Graduate Research Tower, UMass Amherst</dd>
-        <dt>Scholar</dt><dd><a href="https://scholar.google.com/citations?user=usu8YBAAAAAJ">Hang Yang on Google Scholar</a></dd>
-        <dt>GitHub</dt><dd><a href="https://github.com/yanghangAI">@yanghangAI</a></dd>
-      </dl>
-    </div>
-  </section>
+  <h2>Selected publications</h2>
+  <ul class="entries">
+    {% for post in site.publications reversed limit:5 %}
+      {% include archive-single.html %}
+    {% endfor %}
+  </ul>
+  <p><a href="{{ '/publications/' | relative_url }}">All publications →</a></p>
 </article>
