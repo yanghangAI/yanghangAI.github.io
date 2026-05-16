@@ -82,7 +82,7 @@ async function onFile(file) {
 async function loadSample() {
   setStatus('Loading sample…');
   try {
-    const resp = await fetch('sample-cover.jpg');
+    const resp = await fetch('/assets/imagehide/sample-cover.jpg');
     const blob = await resp.blob();
     const bitmap = await createImageBitmap(blob);
     const c = new OffscreenCanvas(bitmap.width, bitmap.height);
@@ -155,8 +155,8 @@ async function loadSodium() {
 let loaded = { encoder: 0, decoder: 0, total: { encoder: 0, decoder: 0 } };
 async function loadModel() {
   await loadModels(
-    'encoder.onnx',
-    'decoder.onnx',
+    '/assets/imagehide/encoder.onnx',
+    '/assets/imagehide/decoder.onnx',
     ({ tag, loaded: l, total }) => {
       loaded[tag] = l;
       if (total) loaded.total[tag] = total;
