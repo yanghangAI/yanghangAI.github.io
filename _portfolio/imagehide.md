@@ -11,4 +11,4 @@ Personal research project — embedded watermarking for real photos under the
 canonical-delivery scope (JPEG + benign resize). Designed to survive the
 Instagram / X / WhatsApp / WeChat compression chains.
 
-[Try the live demo →](/imagehide/)
+[Try the live demo →](/imagehide-demo/)
