@@ -234,7 +234,7 @@ collections:
     output: true
     permalink: /:collection/:path/
   tools:
-    output: true
+    output: false
     permalink: /:collection/:path/
 
 
