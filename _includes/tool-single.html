@@ -4,10 +4,10 @@
   </div>
   <div class="entry__main">
     <h3 class="entry__title">
-      {% if post.url contains '://' %}
-        <a href="{{ post.url }}">{{ post.title }}</a>
+      {% if post.link contains '://' %}
+        <a href="{{ post.link }}">{{ post.title }}</a>
       {% else %}
-        <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
+        <a href="{{ post.link | relative_url }}">{{ post.title }}</a>
       {% endif %}
       {% if post.status and post.status != 'live' %}
         <span class="entry__meta"><em>{{ post.status }}</em></span>
