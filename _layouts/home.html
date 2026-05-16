@@ -10,13 +10,44 @@ layout: default
     <a href="https://github.com/yanghangAI">GitHub</a>
   </p>
 
+  <h2>Research</h2>
+  <p>I work on machine learning, invertible neural networks, and robotics.</p>
+  <ul>
+    <li><strong>Mobile motion capture.</strong> Using a quadruped robot as a mobile platform to record human motion outside the constraints of a fixed studio.</li>
+    <li><strong>Invertible neural networks</strong> for lossless information recovery, applied to deep-learning image steganography (<a href="https://arxiv.org/abs/2309.13620">PRIS</a>, <a href="https://arxiv.org/abs/2311.18243">DKiS</a>).</li>
+    <li><strong>Medical imaging.</strong> Vision transformers for automated disease detection — <a href="https://link.springer.com/article/10.1007/s13042-022-01676-7">CovidViT</a> reaches 98% on chest X-rays.</li>
+    <li><strong>Robotics.</strong> Legged-robot perception, autonomy, and human–robot interaction.</li>
+  </ul>
+
   {{ content }}
 
-  <h2>Selected publications</h2>
+  <h2>Publications</h2>
   <ul class="entries">
-    {% for post in site.publications reversed limit:5 %}
+    {% for post in site.publications reversed %}
       {% include archive-single.html %}
     {% endfor %}
   </ul>
-  <p><a href="{{ '/publications/' | relative_url }}">All publications →</a></p>
+
+  <h2>Teaching</h2>
+  <ul class="entries">
+    {% for post in site.teaching reversed %}
+      {% include archive-single.html %}
+    {% endfor %}
+  </ul>
+
+  <h2>Projects</h2>
+  <ul class="entries">
+    {% for post in site.portfolio %}
+      {% include archive-single.html %}
+    {% endfor %}
+  </ul>
+
+  <h2>Education</h2>
+  <div class="register">
+    <dl>
+      <dt>2024 — present</dt><dd><strong>Ph.D., Mathematics</strong>, University of Massachusetts Amherst</dd>
+      <dt>2021 — 2024</dt><dd><strong>M.Sc., Mathematics</strong>, China Agricultural University</dd>
+      <dt>2017 — 2021</dt><dd><strong>B.Sc., Mathematics</strong>, China Agricultural University</dd>
+    </dl>
+  </div>
 </article>
