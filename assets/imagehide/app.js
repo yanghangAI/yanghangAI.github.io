@@ -5,8 +5,7 @@ import { ATTACKS } from './attacks.js';
 import { loadModels, encode, decode, getBackend } from './pipeline.js';
 
 const LIBSODIUM_CDN = 'https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/+esm';
-const MAX_PIXELS_BEFORE_WARN = 6 * 1024 * 1024;   // ~6 MP — soft warning, above this we suggest desktop
-const MAX_ENCODE_DIM = 1024;                       // hard cap per axis to fit mobile browser memory
+const MAX_PIXELS_BEFORE_WARN = 3 * 1024 * 1024;   // ~3 MP — mobile-safe threshold
 
 const els = {};
 let sodium = null;
@@ -98,46 +97,22 @@ async function loadSample() {
 function onImageLoaded(imageData) {
   state.originalImage = imageData;
   const W = imageData.width, H = imageData.height;
-  // Hard-cap encoded region per axis to MAX_ENCODE_DIM so the demo fits in
-  // mobile browser memory. Anything bigger is center-cropped to the cap;
-  // untouched pixels outside the cap are preserved and shown around the
-  // watermarked center.
-  state.crop = computeCappedCrop(H, W);
+  state.crop = computeCrop(H, W);
   const pixels = W * H;
   state.sizeOk = pixels <= MAX_PIXELS_BEFORE_WARN;
   drawToCanvas(els.cover, imageData);
-  const capNote = (state.crop.cropH < H - (H % 64) || state.crop.cropW < W - (W % 64))
-    ? ` (center-cropped to ${MAX_ENCODE_DIM} px for mobile-safe memory)`
-    : '';
-  setStatus(`Loaded ${W}×${H}. Encoding ${state.crop.cropW}×${state.crop.cropH}${capNote}.${
-    state.sizeOk ? '' : ` <span class="warn">Image is ${(pixels / 1e6).toFixed(1)} MP — desktop is more reliable than mobile. <button id="ih-override">Continue anyway</button></span>`
+  setStatus(`Loaded ${W}×${H}. Encoding ${state.crop.cropW}×${state.crop.cropH} (multiple of 64).${
+    state.sizeOk ? '' : ` <span class="warn">Image is ${(pixels / 1e6).toFixed(1)} MP — likely to crash mobile browsers (Safari tab caps around ~300 MB). Use desktop for full-resolution input, or <button id="ih-override">try anyway</button>.</span>`
   }`);
   if (!state.sizeOk) {
     document.getElementById('ih-override').addEventListener('click', () => {
       state.sizeOk = true;
-      setStatus(`Continuing with ${(pixels / 1e6).toFixed(1)} MP source. Encoded region is still ${state.crop.cropW}×${state.crop.cropH}.`);
+      setStatus(`Continuing with ${(pixels / 1e6).toFixed(1)} MP.`);
       ensureLoaded();
     });
     return;
   }
   ensureLoaded();
-}
-
-function computeCappedCrop(H, W) {
-  const c = computeCrop(H, W);
-  const capH = Math.min(c.cropH, MAX_ENCODE_DIM - (MAX_ENCODE_DIM % 64));
-  const capW = Math.min(c.cropW, MAX_ENCODE_DIM - (MAX_ENCODE_DIM % 64));
-  if (capH === c.cropH && capW === c.cropW) return c;
-  const top = (H - capH) >> 1;
-  const left = (W - capW) >> 1;
-  return {
-    cropH: capH, cropW: capW,
-    top, left,
-    trimmedTop: top,
-    trimmedBottom: H - capH - top,
-    trimmedLeft: left,
-    trimmedRight: W - capW - left,
-  };
 }
 
 function drawToCanvas(canvas, imageData) {
