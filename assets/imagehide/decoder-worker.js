@@ -38,10 +38,13 @@ const ORT_BUNDLE = `${ORT_BASE}ort.webgpu.min.mjs`;
 
 // Mirror worker diagnostics to the main thread so they show in the
 // page's devtools console even when the worker context is hidden
-// (Safari/Firefox default behavior).
+// (Safari/Firefox default behavior). Tagged so the deploy-version is
+// visible in the worker logs too, helping diagnose stale-cache cases.
+const _DIAG_TAG = '[v2]';
 function diag(msg) {
-  try { console.log('[imagehide-worker]', msg); } catch (_) {}
-  try { self.postMessage({ id: 0, type: 'diag', message: msg }); } catch (_) {}
+  const tagged = `${_DIAG_TAG} ${msg}`;
+  try { console.log('[imagehide-worker]', tagged); } catch (_) {}
+  try { self.postMessage({ id: 0, type: 'diag', message: tagged }); } catch (_) {}
 }
 
 function isIOS() {
@@ -104,6 +107,7 @@ function imageBufToFloat32CHW(buf, W, H) {
 
 async function handle(msg) {
   if (msg.type === 'init') {
+    diag(`init received for mode=${msg.mode}`);
     if (!ort) {
       ort = await import(ORT_BUNDLE);
       if (ort.env && ort.env.wasm) ort.env.wasm.wasmPaths = ORT_BASE;
