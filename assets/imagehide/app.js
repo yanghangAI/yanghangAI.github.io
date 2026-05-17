@@ -5,7 +5,8 @@ import { ATTACKS } from './attacks.js';
 import { loadModels, encode, decode, getBackend } from './pipeline.js';
 
 const LIBSODIUM_CDN = 'https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/+esm';
-const MAX_PIXELS_BEFORE_WARN = 6 * 1024 * 1024;   // ~6 MP
+const MAX_PIXELS_BEFORE_WARN = 6 * 1024 * 1024;   // ~6 MP — soft warning, above this we suggest desktop
+const MAX_ENCODE_DIM = 1024;                       // hard cap per axis to fit mobile browser memory
 
 const els = {};
 let sodium = null;
@@ -97,22 +98,46 @@ async function loadSample() {
 function onImageLoaded(imageData) {
   state.originalImage = imageData;
   const W = imageData.width, H = imageData.height;
-  state.crop = computeCrop(H, W);
+  // Hard-cap encoded region per axis to MAX_ENCODE_DIM so the demo fits in
+  // mobile browser memory. Anything bigger is center-cropped to the cap;
+  // untouched pixels outside the cap are preserved and shown around the
+  // watermarked center.
+  state.crop = computeCappedCrop(H, W);
   const pixels = W * H;
   state.sizeOk = pixels <= MAX_PIXELS_BEFORE_WARN;
   drawToCanvas(els.cover, imageData);
-  setStatus(`Loaded ${W}×${H}. Cropping to ${state.crop.cropW}×${state.crop.cropH} for encoding.${
-    state.sizeOk ? '' : ` <span class="warn">Image is ${(pixels / 1e6).toFixed(1)} MP — encoding may be slow or fail in your browser. <button id="ih-override">Run anyway</button></span>`
+  const capNote = (state.crop.cropH < H - (H % 64) || state.crop.cropW < W - (W % 64))
+    ? ` (center-cropped to ${MAX_ENCODE_DIM} px for mobile-safe memory)`
+    : '';
+  setStatus(`Loaded ${W}×${H}. Encoding ${state.crop.cropW}×${state.crop.cropH}${capNote}.${
+    state.sizeOk ? '' : ` <span class="warn">Image is ${(pixels / 1e6).toFixed(1)} MP — desktop is more reliable than mobile. <button id="ih-override">Continue anyway</button></span>`
   }`);
   if (!state.sizeOk) {
     document.getElementById('ih-override').addEventListener('click', () => {
       state.sizeOk = true;
-      setStatus(`Override: will run on ${(pixels / 1e6).toFixed(1)} MP.`);
+      setStatus(`Continuing with ${(pixels / 1e6).toFixed(1)} MP source. Encoded region is still ${state.crop.cropW}×${state.crop.cropH}.`);
       ensureLoaded();
     });
     return;
   }
   ensureLoaded();
+}
+
+function computeCappedCrop(H, W) {
+  const c = computeCrop(H, W);
+  const capH = Math.min(c.cropH, MAX_ENCODE_DIM - (MAX_ENCODE_DIM % 64));
+  const capW = Math.min(c.cropW, MAX_ENCODE_DIM - (MAX_ENCODE_DIM % 64));
+  if (capH === c.cropH && capW === c.cropW) return c;
+  const top = (H - capH) >> 1;
+  const left = (W - capW) >> 1;
+  return {
+    cropH: capH, cropW: capW,
+    top, left,
+    trimmedTop: top,
+    trimmedBottom: H - capH - top,
+    trimmedLeft: left,
+    trimmedRight: W - capW - left,
+  };
 }
 
 function drawToCanvas(canvas, imageData) {
@@ -205,11 +230,20 @@ async function runEncode() {
   state.encodeMs = ms;
 
   // Reconstruct full-size container (untouched strips + encoded core).
-  state.fullContainer = pasteBack(container, strips, state.crop,
+  const fullContainer = pasteBack(container, strips, state.crop,
                                   state.originalImage.width,
                                   state.originalImage.height);
-  drawToCanvas(els.container, state.fullContainer);
+  drawToCanvas(els.container, fullContainer);
   drawResidual(els.residual, core, container, 10);
+
+  // Capture original dimensions for the oneshot line, then drop the full-size
+  // buffers — attacks only need (capped, ≤1024²) coreCover/coreContainer from
+  // here on, which is critical for mobile memory budgets.
+  state.origW = state.originalImage.width;
+  state.origH = state.originalImage.height;
+  state.fullContainer = null;
+  state.fullCover = null;
+  state.originalImage = null;
 
   // Single decode time-probe on the clean container.
   const dec = await decode(container);
@@ -219,7 +253,7 @@ async function runEncode() {
     ? ` (${state.crop.trimmedTop + state.crop.trimmedBottom} px trimmed vertically, ${state.crop.trimmedLeft + state.crop.trimmedRight} px horizontally)`
     : '';
   els.oneshot.textContent =
-    `Image: ${state.originalImage.width} × ${state.originalImage.height} → cropped to ${state.crop.cropW} × ${state.crop.cropH}${cropMsg}\n` +
+    `Image: ${state.origW} × ${state.origH} → encoded region ${state.crop.cropW} × ${state.crop.cropH}${cropMsg}\n` +
     `Payload: 896 bits (128 H | 512 sig | 256 pk)\n` +
     `Encode: ${state.encodeMs.toFixed(1)} ms · Decode: ${state.decodeMs.toFixed(1)} ms`;
 }
@@ -255,12 +289,14 @@ async function runAttacks() {
     const row = document.getElementById(`row-${a.id}`);
     row.classList.remove('queued');
     row.classList.add('running');
+    // Yield to the browser so it can GC and paint between rows. Critical on
+    // mobile where memory pressure can crash the tab otherwise.
+    await new Promise(r => requestAnimationFrame(r));
     try {
-      const attackedContainer = await a.fn(state.fullContainer);
-      const attackedCover     = await a.fn(state.fullCover);
-      // Crop both to the canonical region for the metric and decode.
-      const aContCore = splitTrim(attackedContainer, state.crop).core;
-      const aCovCore  = splitTrim(attackedCover, state.crop).core;
+      // Attacks run on the (already-cropped, capped-size) core, not the full
+      // original — saves an order of magnitude of memory on phone-sized inputs.
+      const aContCore = await a.fn(state.coreContainer);
+      const aCovCore  = await a.fn(state.coreCover);
       const p = psnr(aContCore, aCovCore);
       const s = ssim(aContCore, aCovCore);
       const { bits: recBits } = await decode(aContCore);
@@ -277,6 +313,7 @@ async function runAttacks() {
       const tds = row.querySelectorAll('td');
       tds[1].textContent = 'err';
       tds[1].title = e.message;
+      setStatus(`Attack ${a.label} failed: ${e.message}`, true);
     }
     row.classList.remove('running');
   }
