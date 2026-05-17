@@ -2,7 +2,7 @@
 layout: archive
 title: "Imagehide demo"
 permalink: /imagehide-demo/
-lede: "Live demo of the MWIP (Minimal Whole-Image Provenance) INN watermark. Upload a photo; the model embeds an 896-bit payload (perceptual hash + Ed25519 signature + public key), then we run the container through 11 channel attacks and measure how the bits survive."
+lede: "Live demo of the MWIP (Minimal Whole-Image Provenance) INN watermark. Encode an 896-bit payload into a photo, or decode one back — optionally through a channel attack. Everything runs in your browser; no upload."
 ---
 
 <link rel="stylesheet" href="{{ '/assets/imagehide/style.css' | relative_url }}">
@@ -13,52 +13,114 @@ lede: "Live demo of the MWIP (Minimal Whole-Image Provenance) INN watermark. Upl
     Demo keypair ships in the page; anyone can forge a valid signature. Real deployment uses device-bound secret keys. The pHash used for <code>H</code> is a placeholder — production MWIP will standardize on a different robust hash.
   </p>
 
-  <div id="ih-upload" class="imagehide__upload">
-    <input id="ih-file" type="file" accept="image/*"><br>
-    <span class="imagehide__upload-sample">
-      or <a href="#" id="ih-sample">load the sample image</a>
-    </span>
+  <nav class="imagehide__tabs" role="tablist" aria-label="Demo mode">
+    <button class="imagehide__tab is-active" data-mode="encode" role="tab" aria-selected="true">
+      <span class="imagehide__tab-num">I.</span> Encode
+    </button>
+    <button class="imagehide__tab" data-mode="decode" role="tab" aria-selected="false">
+      <span class="imagehide__tab-num">II.</span> Decode
+    </button>
+  </nav>
+
+  <!-- ============================ ENCODE PANE ============================ -->
+  <div class="imagehide__pane" data-pane="encode" role="tabpanel">
+
+    <div class="imagehide__field">
+      <div class="imagehide__field-label">Cover image</div>
+      <div id="ih-enc-upload" class="imagehide__upload">
+        <input id="ih-enc-file" type="file" accept="image/*"><br>
+        <span class="imagehide__upload-sample">
+          or <a href="#" id="ih-enc-sample">load the sample image</a>
+        </span>
+      </div>
+    </div>
+
+    <div class="imagehide__field">
+      <div class="imagehide__field-label">Payload bits (896 total)</div>
+      <label class="imagehide__radio">
+        <input type="radio" name="ih-bits-source" value="auto" checked>
+        <span><strong>Auto</strong> — pHash(<code>H</code>, 128) ∥ Ed25519 sig (512) ∥ demo pk (256)</span>
+      </label>
+      <label class="imagehide__radio">
+        <input type="radio" name="ih-bits-source" value="custom">
+        <span><strong>Custom</strong> — paste 896 <code>0</code>/<code>1</code> chars, or 224 hex chars</span>
+      </label>
+      <textarea id="ih-enc-customBits"
+                class="imagehide__textarea"
+                rows="3"
+                placeholder="0101…  (896 bits)   or   a1b2c3…  (224 hex chars)"
+                disabled></textarea>
+    </div>
+
+    <div class="imagehide__actions">
+      <button id="ih-enc-runBtn" class="imagehide__btn imagehide__btn--primary" disabled>
+        Encode →
+      </button>
+      <button id="ih-enc-downloadBtn" class="imagehide__btn" disabled>
+        Download container.png
+      </button>
+    </div>
+
+    <p id="ih-enc-status" class="imagehide__status">Drop an image or pick a file to begin.</p>
+
+    <div class="imagehide__panels">
+      <div class="imagehide__panel">
+        <canvas id="ih-cover"></canvas>
+        <div class="imagehide__panel-label">cover</div>
+      </div>
+      <div class="imagehide__panel">
+        <canvas id="ih-container"></canvas>
+        <div class="imagehide__panel-label">container (watermarked)</div>
+      </div>
+      <div class="imagehide__panel">
+        <canvas id="ih-residual"></canvas>
+        <div class="imagehide__panel-label">residual ×10</div>
+      </div>
+    </div>
+
+    <pre id="ih-oneshot" class="imagehide__oneshot">Encode stats will appear here.</pre>
   </div>
 
-  <p id="ih-status" class="imagehide__status">Drop an image or pick a file to begin.</p>
+  <!-- ============================ DECODE PANE ============================ -->
+  <div class="imagehide__pane is-hidden" data-pane="decode" role="tabpanel">
 
-  <div class="imagehide__panels">
-    <div class="imagehide__panel">
-      <canvas id="ih-cover"></canvas>
-      <div class="imagehide__panel-label">cover</div>
+    <div class="imagehide__field">
+      <div class="imagehide__field-label">Image to decode</div>
+      <label class="imagehide__radio">
+        <input type="radio" name="ih-dec-source" value="last" id="ih-dec-srcLast" disabled checked>
+        <span><strong>Use last encoded container</strong> <em class="imagehide__hint" id="ih-dec-lastHint">— none yet; encode one first or upload below</em></span>
+      </label>
+      <label class="imagehide__radio">
+        <input type="radio" name="ih-dec-source" value="upload" id="ih-dec-srcUpload">
+        <span><strong>Upload an image</strong></span>
+      </label>
+      <div id="ih-dec-upload" class="imagehide__upload imagehide__upload--compact">
+        <input id="ih-dec-file" type="file" accept="image/*">
+      </div>
     </div>
-    <div class="imagehide__panel">
-      <canvas id="ih-container"></canvas>
-      <div class="imagehide__panel-label">container (watermarked)</div>
+
+    <div class="imagehide__field">
+      <div class="imagehide__field-label">Channel attack (applied before decode)</div>
+      <select id="ih-dec-attack" class="imagehide__select"></select>
     </div>
-    <div class="imagehide__panel">
-      <canvas id="ih-residual"></canvas>
-      <div class="imagehide__panel-label">residual ×10</div>
+
+    <div class="imagehide__actions">
+      <button id="ih-dec-runBtn" class="imagehide__btn imagehide__btn--primary" disabled>
+        Decode →
+      </button>
     </div>
+
+    <p id="ih-dec-status" class="imagehide__status">Encode an image first, or upload one.</p>
+
+    <div class="imagehide__panels imagehide__panels--single">
+      <div class="imagehide__panel">
+        <canvas id="ih-dec-preview"></canvas>
+        <div class="imagehide__panel-label" id="ih-dec-previewLabel">decoded image (after attack)</div>
+      </div>
+    </div>
+
+    <pre id="ih-dec-output" class="imagehide__oneshot">Decoded bits will appear here.</pre>
   </div>
-
-  <pre id="ih-oneshot" class="imagehide__oneshot">One-shot stats will appear here after encoding.</pre>
-
-  <div class="imagehide__controls">
-    <strong>Attacks:</strong>
-    <span id="ih-attackList"></span>
-    <button id="ih-runBtn" class="primary" disabled>Run</button>
-  </div>
-
-  <table class="imagehide__results">
-    <thead>
-      <tr>
-        <th>Attack</th>
-        <th class="num">Bit acc</th>
-        <th>Sig</th>
-      </tr>
-    </thead>
-    <tbody id="ih-resultsBody"></tbody>
-  </table>
-
-  <p style="margin-top:1.5rem;font-size:0.95rem;color:#555;">
-    <em>Out of scope for this model:</em> crop, rotate, Gaussian noise, Gaussian blur. The MWIP encoder targets the canonical-delivery scope (JPEG + benign down-up resize).
-  </p>
 
   <hr style="margin:2rem 0 1.2rem;border:0;border-top:1px solid #ddd;">
 
@@ -67,7 +129,7 @@ lede: "Live demo of the MWIP (Minimal Whole-Image Provenance) INN watermark. Upl
   </p>
 
   <p class="imagehide__perf-note">
-    <strong>Why your image got downsampled.</strong> The decoder allocates ≈ 12 MB of float32 tensor per megapixel plus intermediates. Running 11 attacks on a 12 MP phone photo overruns Safari&#39;s ~300 MB tab budget. The demo auto-resizes anything above <strong>0.5 MP on mobile</strong> or <strong>1 MP on desktop</strong>, preserving aspect ratio. The model itself has no such limit — on a phone NPU or server it runs the full image.
+    <strong>Why your image got downsampled.</strong> The decoder allocates ≈ 12 MB of float32 tensor per megapixel plus intermediates. On a 12 MP phone photo this overruns Safari&#39;s ~300 MB tab budget. The demo auto-resizes anything above <strong>0.5 MP on mobile</strong> or <strong>1 MP on desktop</strong>, preserving aspect ratio. The model itself has no such limit — on a phone NPU or server it runs the full image.
   </p>
 
   <p class="imagehide__perf-note">
@@ -94,12 +156,15 @@ lede: "Live demo of the MWIP (Minimal Whole-Image Provenance) INN watermark. Upl
     </tbody>
   </table>
 
+  <p style="margin-top:1.2rem;font-size:0.95rem;color:#555;">
+    <em>Out of scope for this model:</em> crop, rotate, Gaussian noise, Gaussian blur. The MWIP encoder targets the canonical-delivery scope (JPEG + benign down-up resize).
+  </p>
+
 </section>
 
 <script type="module">
   // Cache-bust modules on every site build so an update of pipeline.js or any
-  // sibling module isn't served stale by an aggressive browser cache (Safari
-  // especially). The build timestamp from Jekyll is the version key.
+  // sibling module isn't served stale by an aggressive browser cache.
   const v = '{{ site.time | date: "%s" }}';
   window.__imagehideVersion = v;
   await import(`{{ '/assets/imagehide/app.js' | relative_url }}?v=${v}`);
