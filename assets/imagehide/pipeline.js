@@ -71,7 +71,8 @@ function send(msg, transfer = []) {
 
 export function getBackend() { return activeBackend; }
 
-export async function loadModels(encoderUrl, decoderUrl, onProgress) {
+export async function loadModels(encoderUrl, decoderUrl, onProgress,
+                                 { eagerInit = true } = {}) {
   if (!encoderBuf || !decoderBuf) {
     const [encBuf, decBuf] = await Promise.all([
       fetchWithProgress(encoderUrl, onProgress, 'encoder'),
@@ -80,12 +81,13 @@ export async function loadModels(encoderUrl, decoderUrl, onProgress) {
     encoderBuf = encBuf;
     decoderBuf = decBuf;
   }
-  // Eagerly spawn an encoder-mode worker so the WebGPU/WASM negotiation
-  // happens NOW, before the user clicks anything. Otherwise `getBackend()`
-  // just reports the default 'wasm' until the first encode/decode, and the
-  // status bar lies about what's actually going to run. The encoder worker
-  // also doubles as warm-up — the first real encode skips session init.
-  await ensureMode('encoder');
+  // Optionally spawn an encoder-mode worker now so the WebGPU/WASM negotiation
+  // happens before the user clicks anything (and getBackend() reports the
+  // real backend in the status bar). On mobile we skip this — eagerly
+  // holding ~100 MB of WASM heap while the user is idle reading the page
+  // pushes iOS Safari into OOM territory. Mobile pays a one-time ~500 ms-1s
+  // session-init cost on the first encode click instead.
+  if (eagerInit) await ensureMode('encoder');
 }
 
 async function ensureMode(mode) {

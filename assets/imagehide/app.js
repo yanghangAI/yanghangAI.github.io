@@ -118,7 +118,13 @@ async function loadInfra() {
   try {
     await Promise.all([loadSodium(), loadModel()]);
     modelStatus = 'ready';
-    setGlobalBar(`ready · running on ${getBackend()} · ${MAX_INPUT_MP_LABEL} cap`, 'is-ready');
+    // On mobile the worker isn't spawned until first encode/decode, so
+    // getBackend() doesn't know the real EP yet. Show a placeholder and
+    // refreshBackendStatus() will update it after the first session inits.
+    setGlobalBar(IS_MOBILE
+      ? `ready · backend on first run · ${MAX_INPUT_MP_LABEL} cap`
+      : `ready · running on ${getBackend()} · ${MAX_INPUT_MP_LABEL} cap`,
+      'is-ready');
     setStatus('enc', 'Ready. Drop a cover image, or use the sample.');
     setStatus('dec', 'Ready. Encode something first, or upload a watermarked image.');
     refreshEncRun(); refreshDecRun();
@@ -152,6 +158,7 @@ async function loadModel() {
       const pct = tot ? Math.round(100 * sum / tot) : 0;
       setGlobalBar(`loading model · ${pct}% (${(sum/1e6).toFixed(1)}/${(tot/1e6).toFixed(1)} MB)`);
     },
+    { eagerInit: !IS_MOBILE },
   );
 }
 
@@ -162,6 +169,15 @@ function setGlobalBar(text, cls = '') {
   _baseStatus = text;
   _baseStatusCls = cls;
   renderGlobalBar();
+}
+
+// Refresh the "ready · running on X · cap" status from the actual backend
+// reported by the pipeline. Called after each encode/decode so mobile users
+// see the real EP once a session has actually been created.
+function refreshBackendStatus() {
+  if (modelStatus !== 'ready') return;
+  setGlobalBar(`ready · running on ${getBackend()} · ${MAX_INPUT_MP_LABEL} cap`,
+               'is-ready');
 }
 
 // Live JS heap readout. Chrome exposes performance.memory; Safari and Firefox
@@ -450,6 +466,7 @@ async function runEncode() {
 
     const encPerm = permFor(core.height, core.width);
     const { container, containerF32, ms } = await encode(core, codeword, encPerm);
+    refreshBackendStatus();
     const psnrV = psnr(container, core);
     const ssimV = ssim(container, core);
 
@@ -692,6 +709,7 @@ async function runDecode() {
     setStatus('dec', `Decoding ${attacked.width}×${attacked.height}…`);
     const decPerm = permFor(attacked.height, attacked.width);
     const { bits: recCodeword, ms } = await decode(attacked, decPerm);   // 1024 bits
+    refreshBackendStatus();
     // Note: we deliberately do NOT releaseSession() here. The decoder worker
     // stays alive across multiple attacks so iOS Safari doesn't overlap two
     // WASM heaps during the ~100ms-1s page-reclaim window. ensureMode() will
