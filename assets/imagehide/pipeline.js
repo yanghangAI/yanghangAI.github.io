@@ -109,7 +109,12 @@ export async function encode(coverImageData, bitsUint8) {
   // We must transfer; the caller can no longer use these buffers. We slice to
   // copy so the caller's ImageData stays usable.
   const imageBuf = coverImageData.data.buffer.slice(0);
-  const bitsBuf  = bitsUint8.buffer.slice(0);
+  // Convert 0/1 bytes → Float32 values up front. Sending the raw byte buffer
+  // and wrapping it as Float32 on the worker side would reinterpret 4 bytes
+  // per float, yielding 224 garbage floats instead of 896 valid ones.
+  const bitsFloat = new Float32Array(bitsUint8.length);
+  for (let i = 0; i < bitsUint8.length; i++) bitsFloat[i] = bitsUint8[i];
+  const bitsBuf = bitsFloat.buffer;
   const r = await send(
     { type: 'encode', imageBuf, W, H, bitsBuf },
     [imageBuf, bitsBuf],
