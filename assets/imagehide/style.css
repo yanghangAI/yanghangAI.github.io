@@ -360,6 +360,19 @@
   margin-top: 0.25rem;
 }
 .ih-stat__unit { font-weight: 400; color: var(--faint); font-size: 0.85em; }
+.ih-stat__note {
+  margin-top: 0.2rem;
+  font-size: 0.66rem;
+  font-style: italic;
+  color: var(--faint);
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 400;
+  cursor: help;
+  border-bottom: 1px dotted var(--faint);
+  display: inline-block;
+  line-height: 1.3;
+}
 
 /* image preview grid */
 .ih-canvases {
