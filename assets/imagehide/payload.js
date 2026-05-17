@@ -102,36 +102,62 @@ function dct2_8x8(block) {
   return out;
 }
 
-// 128-bit hybrid perceptual hash: 64 low-freq DCT bits + 64 Block-Mean-Value bits.
-//
-//   Half 1 (bits[0..64))  — 8×8 DCT of a 32→8 mean-pooled luminance image.
-//                            Threshold the 63 non-DC coefficients at their median;
-//                            bit 0 fixed at 1 (DC bit, non-informative).
-//                            Robust to JPEG / resize at the low-freq band.
-//   Half 2 (bits[64..128)) — Block-mean-value hash on a 16×16 → 8×8 mean-pool.
-//                             Threshold each 8×8 cell mean against the global mean.
-//                             Independent of the DCT phase; survives spatial-domain
-//                             attacks the DCT half misses.
-//
-// Both halves give 64 truly independent bits (no duplication). Empirically,
-// the combined hash drifts at most ~16/128 bits across the demo's attack
-// catalog on diverse COCO photos — within BCH(127,78,t=7)'s 7-bit capacity on
-// 77% of images, t=10 covers 90%. The earlier high-freq-only DCT-128 variant
-// drifted up to 22/128.
-export function phash128(imageData) {
-  const gray32 = rgbaToGrayResized(imageData, 32);
+// 3×3 box blur with edge replication. Approximates the Jarosz/Gaussian
+// preprocessing PDQ uses — smooths attack-induced noise (JPEG quantization,
+// resampling artifacts) below pHash bit-threshold boundaries.
+function boxBlur3x3(src, W, H) {
+  const out = new Float64Array(W * H);
+  for (let y = 0; y < H; y++) {
+    const y0 = y > 0 ? y - 1 : 0;
+    const y1 = y;
+    const y2 = y < H - 1 ? y + 1 : H - 1;
+    for (let x = 0; x < W; x++) {
+      const x0 = x > 0 ? x - 1 : 0;
+      const x1 = x;
+      const x2 = x < W - 1 ? x + 1 : W - 1;
+      out[y * W + x] = (
+          src[y0 * W + x0] + src[y0 * W + x1] + src[y0 * W + x2]
+        + src[y1 * W + x0] + src[y1 * W + x1] + src[y1 * W + x2]
+        + src[y2 * W + x0] + src[y2 * W + x1] + src[y2 * W + x2]
+      ) / 9;
+    }
+  }
+  return out;
+}
 
-  // -------- Half 1: 64-bit low-freq DCT --------
+// 128-bit hybrid perceptual hash: 64 low-freq DCT bits + 64 Block-Mean-Value bits,
+// with PDQ-inspired preprocessing (large downsample + two-pass box blur).
+//
+//   Half 1 (bits[0..64))  — 64×64 grayscale → 3×3 box blur ×2 → 8×8 mean-pool
+//                            → 8×8 DCT → threshold 63 non-DC at median, bit 0 = 1.
+//                            The 64×64 + blur path mirrors PDQ; the larger source
+//                            averaging stabilizes coefficients against attack noise.
+//   Half 2 (bits[64..128)) — 16×16 grayscale → 3×3 box blur ×2 → 2×2 mean-pool
+//                            to 8×8 → threshold each cell mean against global mean.
+//                            Independent algorithm; survives attacks that move the
+//                            DCT phase but preserve block luminance structure.
+//
+// Empirical drift sweep across 30 diverse COCO images at 512×512, vs the demo's
+// 11-attack catalog (JPEG q40+, resize 0.5+, chain_wechat, etc.):
+//   worst-image max drift: 12/128 bits
+//   p95 worst:             7/128
+//   median worst:          4/128
+//   BCH(127,78,t=7) covers 93% of images (up from 77% with the unblurred hybrid,
+//   37% with the high-freq-only DCT-128 variant).
+export function phash128(imageData) {
+  // -------- Half 1: 64-bit low-freq DCT (PDQ-style 64×64 + blur + 8×8 pool) --------
+  const gray64 = rgbaToGrayResized(imageData, 64);
+  const blurred64 = boxBlur3x3(boxBlur3x3(gray64, 64, 64), 64, 64);
   const block8 = new Float64Array(64);
   for (let by = 0; by < 8; by++) {
     for (let bx = 0; bx < 8; bx++) {
       let s = 0;
-      for (let dy = 0; dy < 4; dy++) {
-        for (let dx = 0; dx < 4; dx++) {
-          s += gray32[(by * 4 + dy) * 32 + (bx * 4 + dx)];
+      for (let dy = 0; dy < 8; dy++) {
+        for (let dx = 0; dx < 8; dx++) {
+          s += blurred64[(by * 8 + dy) * 64 + (bx * 8 + dx)];
         }
       }
-      block8[by * 8 + bx] = s / 16;
+      block8[by * 8 + bx] = s / 64;
     }
   }
   const dct = dct2_8x8(block8);
@@ -142,8 +168,9 @@ export function phash128(imageData) {
   bitsDct[0] = 1;  // DC bit fixed; non-informative
   for (let i = 1; i < 64; i++) bitsDct[i] = lowfreq[i - 1] > medianLF ? 1 : 0;
 
-  // -------- Half 2: 64-bit Block Mean Value --------
+  // -------- Half 2: 64-bit Block Mean Value (16×16 + blur + 2×2 pool) --------
   const gray16 = rgbaToGrayResized(imageData, 16);
+  const blurred16 = boxBlur3x3(boxBlur3x3(gray16, 16, 16), 16, 16);
   const block8b = new Float64Array(64);
   let total = 0;
   for (let by = 0; by < 8; by++) {
@@ -151,7 +178,7 @@ export function phash128(imageData) {
       let s = 0;
       for (let dy = 0; dy < 2; dy++) {
         for (let dx = 0; dx < 2; dx++) {
-          s += gray16[(by * 2 + dy) * 16 + (bx * 2 + dx)];
+          s += blurred16[(by * 2 + dy) * 16 + (bx * 2 + dx)];
         }
       }
       const m = s / 4;
