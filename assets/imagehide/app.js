@@ -264,9 +264,10 @@ async function runAttacks() {
     const row = document.getElementById(`row-${a.id}`);
     row.classList.remove('queued');
     row.classList.add('running');
-    // Yield to the browser so it can GC and paint between rows. Critical on
-    // mobile where memory pressure can crash the tab otherwise.
-    await new Promise(r => requestAnimationFrame(r));
+    // Long enough yield for the browser to GC, paint, and release GPU buffers
+    // from the prior decode. Critical on mobile Safari where memory pressure
+    // accumulates faster than rAF-only yields let it recover.
+    await new Promise(r => setTimeout(r, 150));
     try {
       // Attacks run on the (already-cropped, capped-size) core, not the full
       // original — saves an order of magnitude of memory on phone-sized inputs.

@@ -108,6 +108,14 @@ function bitsToFloat32(bitsUint8) {
 
 // ---------- public API ----------
 
+function disposeTensor(t) {
+  // WebGPU tensors hold GPU buffers that JS GC cannot free; CPU/WASM tensors
+  // gain nothing from dispose() but it's safe to call.
+  if (t && typeof t.dispose === 'function') {
+    try { t.dispose(); } catch (_) { /* ignore */ }
+  }
+}
+
 export async function encode(coverImageData, bitsUint8) {
   if (!encoderSession) throw new Error('encoder not loaded');
   const W = coverImageData.width, H = coverImageData.height;
@@ -117,7 +125,11 @@ export async function encode(coverImageData, bitsUint8) {
   const t0 = performance.now();
   const { container_rgb } = await encoderSession.run({ host_rgb: imgT, bits: bitsT });
   const dt = performance.now() - t0;
-  return { container: float32CHWtoImageData(container_rgb.data, W, H), ms: dt };
+  const container = float32CHWtoImageData(container_rgb.data, W, H);
+  disposeTensor(imgT);
+  disposeTensor(bitsT);
+  disposeTensor(container_rgb);
+  return { container, ms: dt };
 }
 
 export async function decode(containerImageData) {
@@ -128,11 +140,13 @@ export async function decode(containerImageData) {
   const t0 = performance.now();
   const { bit_logits } = await decoderSession.run({ container_rgb: t });
   const dt = performance.now() - t0;
-  // Sigmoid + threshold 0.5
-  const bits = new Uint8Array(bit_logits.data.length);
+  const src = bit_logits.data;
+  const bits = new Uint8Array(src.length);
   for (let i = 0; i < bits.length; i++) {
-    const s = 1 / (1 + Math.exp(-bit_logits.data[i]));
+    const s = 1 / (1 + Math.exp(-src[i]));
     bits[i] = s > 0.5 ? 1 : 0;
   }
+  disposeTensor(t);
+  disposeTensor(bit_logits);
   return { bits, ms: dt };
 }
