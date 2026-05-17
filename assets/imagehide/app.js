@@ -7,23 +7,23 @@ const { psnr, ssim } = await import(`./metrics.js?v=${V}`);
 const { ATTACKS } = await import(`./attacks.js?v=${V}`);
 const { loadModels, encode, decode, getBackend, releaseSession } =
   await import(`./pipeline.js?v=${V}`);
-// Outer ECC: RS(128, 103) over GF(2^8). 817 wire bits -> 1024-bit codeword
-// (what the model sees), corrects up to 12 byte errors of channel damage.
+// Outer ECC: RS(128, 100) over GF(2^8). 796 wire bits -> 1024-bit codeword
+// (what the model sees), corrects up to 14 byte errors of channel damage.
 const { eccEncode, eccDecode, T_BYTES, PAYLOAD_BITS, CODEWORD_BITS } =
   await import(`./ecc.js?v=${V}`);
-// Slepian-Wolf pHash compression: BCH(127, 78, t=7). We transmit a 49-bit
+// Slepian-Wolf pHash compression: BCH(127, t=4). We transmit a 28-bit
 // syndrome of H instead of the full 128 bits; the receiver recomputes pHash
 // on the attacked image and uses the syndrome to recover H exactly, fixing
-// up to 7 bits of pHash drift.
+// up to 4 bits of pHash drift (PDQ's observed max across 30 COCO is 3).
 const { bchEncodeSyndrome, bchDecode, BCH_SYNDROME_BITS, BCH_T } =
   await import(`./bch.js?v=${V}`);
 
 const MODEL_BITS = CODEWORD_BITS;     // 1024
 
-// Wire payload layout (817 bits, exactly PAYLOAD_BITS):
-//   [0   .. 49 )  BCH syndrome of pHash
-//   [49  .. 561)  Ed25519 signature (512 bits)
-//   [561 ..817 )  Ed25519 public key (256 bits)
+// Wire payload layout (796 bits, exactly PAYLOAD_BITS):
+//   [0   .. 28 )  BCH syndrome of pHash
+//   [28  .. 540)  Ed25519 signature (512 bits)
+//   [540 ..796 )  Ed25519 public key (256 bits)
 const OFF_SYN = 0;
 const OFF_SIG = OFF_SYN + BCH_SYNDROME_BITS;             // 49
 const OFF_PK  = OFF_SIG + N_SIG;                         // 561
@@ -68,10 +68,10 @@ let sodium = null, demoKeypair = null;
 let modelStatus = 'idle';
 
 let lastContainer = null;
-let lastPayloadBits = null;     // 817-bit wire payload (syndrome|sig|pk)
+let lastPayloadBits = null;     // 796-bit wire payload (syndrome|sig|pk)
 let lastCodewordBits = null;    // 1024-bit RS codeword
 let lastH = null;                // canonical 16-byte H (LSB of last byte cleared)
-let lastSyndrome = null;         // 49-bit BCH syndrome
+let lastSyndrome = null;         // 28-bit BCH syndrome
 let lastLogicalParts = null;     // { H, sig, pk } for display + bit-acc
 
 const enc = { cover: null, origW: 0, origH: 0, crop: null, busy: false };
@@ -397,8 +397,8 @@ async function runEncode() {
     const parts = { H, sig, pk };
 
     // Slepian-Wolf: transmit only the BCH syndrome of H (49 bits) instead of
-    // H itself (128 bits). Then wrap (syndrome | sig | pk) = 817 wire bits
-    // in the RS(128, 103) codeword the model sees.
+    // H itself (128 bits). Then wrap (syndrome | sig | pk) = 796 wire bits
+    // in the RS(128, 100) codeword the model sees.
     const H_bits128 = bytesToBits(H);
     const syndrome = bchEncodeSyndrome(H_bits128.slice(0, 127));
     const wireBits = packWirePayload(syndrome, sig, pk);
@@ -427,12 +427,12 @@ async function runEncode() {
 
     const synStr = (() => {
       const g = [];
-      for (let i = 0; i < 7; i++) g.push(Array.from(syndrome.slice(i * 7, (i + 1) * 7)).join(''));
+      for (let i = 0; i < BCH_T; i++) g.push(Array.from(syndrome.slice(i * 7, (i + 1) * 7)).join(''));
       return g.join(' ');
     })();
     $('oneshot').textContent =
       `image:    ${enc.origW}×${enc.origH} → encoded region ${enc.crop.cropW}×${enc.crop.cropH}\n` +
-      `payload:  ${source}  (Slepian-Wolf: 49b BCH syndrome + 512b sig + 256b pk = 817 wire → RS(128,103) → ${MODEL_BITS}b codeword)\n` +
+      `payload:  ${source}  (Slepian-Wolf: ${BCH_SYNDROME_BITS}b BCH(t=${BCH_T}) syndrome + ${N_SIG}b sig + ${N_PK}b pk = ${PAYLOAD_BITS} wire → RS corrects ${T_BYTES} byte errors → ${MODEL_BITS}b codeword)\n` +
       `\n` +
       `H        : ${hex(parts.H)}  (128 bits, recomputable from image)\n` +
       `BCH syn  : ${synStr}  (49 bits, embedded in place of H)\n` +
@@ -621,7 +621,7 @@ async function runDecode() {
     const { bits: recCodeword, ms } = await decode(attacked);   // 1024 bits
     releaseSession();
 
-    // Stage 1 — RS(128, 103) decode → 817 wire bits, fixing up to 12 byte errors.
+    // Stage 1 — RS(128, 100) decode → 796 wire bits, fixing up to 14 byte errors.
     const eccRes = eccDecode(recCodeword);
     const recWire = eccRes.bits;
     const eccErrors = eccRes.errors;
@@ -630,7 +630,7 @@ async function runDecode() {
     const { syndrome: recSyndrome, sig: recSig, pk: recPk } = unpackWirePayload(recWire);
 
     // Stage 2 — Slepian-Wolf: recompute pHash on the attacked image and use
-    // BCH(127, 78, t=7) with the received syndrome to recover H exactly,
+    // BCH(127, t=4) with the received syndrome to recover H exactly,
     // correcting up to 7 bits of pHash drift.
     const H_local = canonicalizeH(phash128(attacked));
     const vGuess = bytesToBits(H_local).slice(0, 127);
@@ -739,12 +739,12 @@ async function runDecode() {
       bchTag = 'drift>7';
     }
     const accLine = acc != null
-      ? `logical (H|sig|pk, 896b) acc: ${acc.toFixed(4)}  ·  wire (817b) acc: ${wireAcc.toFixed(4)}  ·  codeword (1024b) acc: ${codewordAcc.toFixed(4)}\nsig: ${sigOk ? 'yes' : 'no'}  ·  RS ecc: ${eccTag}  ·  BCH pHash: ${bchTag}`
+      ? `logical (H|sig|pk, 896b) acc: ${acc.toFixed(4)}  ·  wire (796b) acc: ${wireAcc.toFixed(4)}  ·  codeword (1024b) acc: ${codewordAcc.toFixed(4)}\nsig: ${sigOk ? 'yes' : 'no'}  ·  RS ecc: ${eccTag}  ·  BCH pHash: ${bchTag}`
       : `acc: — (no reference)  ·  sig: ${sigOk ? 'yes' : 'no'}  ·  RS ecc: ${eccTag}  ·  BCH pHash: ${bchTag}`;
     const bitsHtml = chunkBitsHTML(recCodeword, knownCodeword);
     const recSynStr = (() => {
       const g = [];
-      for (let i = 0; i < 7; i++) g.push(Array.from(recSyndrome.slice(i * 7, (i + 1) * 7)).join(''));
+      for (let i = 0; i < BCH_T; i++) g.push(Array.from(recSyndrome.slice(i * 7, (i + 1) * 7)).join(''));
       return g.join(' ');
     })();
     $('dec-output').innerHTML =

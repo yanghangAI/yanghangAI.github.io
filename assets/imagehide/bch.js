@@ -21,10 +21,11 @@
 
 const M = 7;
 const N127 = 127;        // codeword length
-const T = 7;             // error-correction capability
-const NSYND_ODD = 7;     // we send S_1, S_3, ..., S_13 -> 7 values × 7 bits = 49 bits
+const T = 4;             // error-correction capability — 1 bit margin over PDQ's
+                         // observed max drift of 3/128 across 30 COCO × 11 attacks
+const NSYND_ODD = T;     // we send S_1, S_3, ..., S_(2t-1) -> T values × M bits
 const SYNDROME_BITS = NSYND_ODD * M;
-const NSYND_FULL = 2 * T;  // BM operates on the full 2t = 14 syndromes
+const NSYND_FULL = 2 * T;  // BM operates on the full 2t syndromes
 
 const PRIM = 0x89;       // x^7 + x^3 + 1, primitive polynomial of GF(2^7)
 

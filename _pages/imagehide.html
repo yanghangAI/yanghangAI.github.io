@@ -157,11 +157,11 @@ lede: "Embed 896 invisible bits into any image, then recover them after a JPEG r
           </div>
           <div class="ih-stat">
             <div class="ih-stat__val" id="ih-d-ecc">—</div>
-            <div class="ih-stat__lbl">rs ecc <span class="ih-stat__note" title="Reed-Solomon RS(128, 103) over GF(2^8) corrects up to 12 byte errors anywhere in the 1024-bit codeword. 'clean' = no channel errors; 'N / 12' = ECC patched N corrupted bytes; 'fail' = more than 12 byte errors slipped through.">·&nbsp;bytes</span></div>
+            <div class="ih-stat__lbl">rs ecc <span class="ih-stat__note" title="Reed-Solomon RS(128, 100) over GF(2^8) corrects up to 14 byte errors anywhere in the 1024-bit codeword. 'clean' = no channel errors; 'N / 14' = ECC patched N corrupted bytes; 'N / 14 (fail)' = more than 14 byte errors slipped through (number is the true byte-diff count vs what we encoded).">·&nbsp;bytes</span></div>
           </div>
           <div class="ih-stat">
             <div class="ih-stat__val" id="ih-d-bch">—</div>
-            <div class="ih-stat__lbl">phash drift <span class="ih-stat__note" title="Slepian-Wolf BCH(127, 78, t=7) over GF(2^7) corrects up to 7 bits of pHash drift between the encoder's H and the receiver's locally-recomputed pHash on the attacked image. 'clean' = pHash survived intact; 'N / 7' = BCH fixed N bit-flips; 'drift>7' = attack moved pHash too far and signature verification fails.">·&nbsp;bits</span></div>
+            <div class="ih-stat__lbl">phash drift <span class="ih-stat__note" title="Slepian-Wolf BCH(127, t=4) over GF(2^7) corrects up to 4 bits of pHash drift between the encoder's H and the receiver's locally-recomputed pHash on the attacked image. PDQ's measured max drift across 30 COCO photos × 11 attacks was 3 bits, so t=4 leaves 1 bit of margin. Number shown is true bit-difference Hamming distance.">·&nbsp;bits</span></div>
           </div>
           <div class="ih-stat">
             <div class="ih-stat__val" id="ih-d-ms">—</div>

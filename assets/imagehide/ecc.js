@@ -1,19 +1,20 @@
-// Reed-Solomon RS(128, 103) over GF(2^8) with primitive polynomial 0x11D
+// Reed-Solomon RS(128, 100) over GF(2^8) with primitive polynomial 0x11D
 // (the standard x^8 + x^4 + x^3 + x^2 + 1 used in RS for QR codes, CCSDS, etc).
 //
-//   Data:    103 bytes  (817 user bits + 7 zero pad)
-//   Parity:  25 bytes   (200 redundancy bits)
+//   Data:    100 bytes  (796 user bits + 4 zero pad)
+//   Parity:  28 bytes   (224 redundancy bits)
 //   Total:   128 bytes  (1024 codeword bits — matches the 1024-bit INN model)
 //
-// Corrects up to floor(25/2) = 12 byte errors anywhere in the codeword.
-// (Up from 8 in the older RS(128, 112). The savings come from Slepian-Wolf
-// pHash compression: we transmit the 49-bit BCH syndrome of pHash instead of
-// the 128-bit hash itself, freeing 79 bits we reinvest in ECC parity.)
+// Corrects up to floor(28/2) = 14 byte errors anywhere in the codeword.
+// (Up from 12 in the prior RS(128, 103). The extra 24 RS parity bits come
+// from shrinking the BCH syndrome from t=7 (49 bits) to t=4 (28 bits) —
+// PDQ's observed max pHash drift across our 30-image sweep is 3 bits, so
+// t=4 still leaves a 1-bit safety margin.)
 //
-// Wire payload layout (817 bits — exported as PAYLOAD_BITS):
-//   [0   .. 49 )  BCH(127, 78, t=7) syndrome of pHash
-//   [49  .. 561)  Ed25519 signature (512 bits)
-//   [561 ..817 )  Ed25519 public key (256 bits)
+// Wire payload layout (796 bits — exported as PAYLOAD_BITS):
+//   [0   .. 28 )  BCH(127, t=4) syndrome of pHash
+//   [28  .. 540)  Ed25519 signature (512 bits)
+//   [540 ..796 )  Ed25519 public key (256 bits)
 //
 // Conventions inside the RS code:
 //   * Codeword byte layout: code[0..K-1] = data bytes, code[K..N-1] = parity
@@ -22,12 +23,12 @@
 //   * Berlekamp-Massey σ stored low-to-high (sigma[0] = constant term = 1)
 
 export const N = 128;
-export const K = 103;
-export const NSYM = N - K;            // 25 parity bytes; t = NSYM/2 = 12
-export const T_BYTES = NSYM >> 1;     // 12
-export const PAYLOAD_BITS = 817;
+export const K = 100;
+export const NSYM = N - K;            // 28 parity bytes; t = NSYM/2 = 14
+export const T_BYTES = NSYM >> 1;     // 14
+export const PAYLOAD_BITS = 796;
 export const CODEWORD_BITS = N * 8;   // 1024
-const PAD_BITS = K * 8 - PAYLOAD_BITS; // 7 trailing zero pad bits
+const PAD_BITS = K * 8 - PAYLOAD_BITS; // 4 trailing zero pad bits
 
 const PRIM_POLY = 0x11D;
 const EXP = new Uint8Array(512);
