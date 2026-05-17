@@ -3,10 +3,11 @@
 const V = (typeof window !== 'undefined' && window.__imagehideVersion) || 'dev';
 const { computeCrop, splitTrim, pasteBack } = await import(`./trim.js?v=${V}`);
 const { phash128, packPayload, unpackPayload, bitAccuracy, N_H } = await import(`./payload.js?v=${V}`);
-// PSNR/SSIM intentionally dropped: computing them requires keeping the cover
-// core resident AND attacking it, which doubled the per-attack peak. Bit
-// accuracy + signature verification are the meaningful "did it survive?"
-// signals; the metrics.js module is no longer imported here.
+// PSNR/SSIM are computed once at encode time (cover vs. clean container) for
+// the one-shot quality readout. They are intentionally NOT computed per-attack
+// — that would require keeping coreCover resident and attacking it, doubling
+// the per-attack peak.
+const { psnr, ssim } = await import(`./metrics.js?v=${V}`);
 const { ATTACKS } = await import(`./attacks.js?v=${V}`);
 const { loadModels, encode, decode, getBackend, releaseSession } = await import(`./pipeline.js?v=${V}`);
 
@@ -234,6 +235,12 @@ async function runEncode() {
   state.coreContainer = container;
   state.encodeMs = ms;
 
+  // One-shot embedding quality: how invisible is the watermark in the clean
+  // container, before any channel attack? Computed here while `core` is still
+  // resident — coreCover gets dropped below.
+  state.encodePsnr = psnr(container, core);
+  state.encodeSsim = ssim(container, core);
+
   // Reconstruct full-size container (untouched strips + encoded core).
   const fullContainer = pasteBack(container, strips, state.crop,
                                   state.originalImage.width,
@@ -262,9 +269,11 @@ async function runEncode() {
     : '';
   const hex = (u8) => Array.from(u8, b => b.toString(16).padStart(2, '0')).join('');
   const bitstr = Array.from(bits).join('');
+  const psnrStr = isFinite(state.encodePsnr) ? `${state.encodePsnr.toFixed(1)} dB` : '∞ dB';
   els.oneshot.textContent =
     `Image: ${state.origW} × ${state.origH} → encoded region ${state.crop.cropW} × ${state.crop.cropH}${cropMsg}\n` +
     `Payload: 896 bits (128 H | 512 sig | 256 pk)\n` +
+    `Container vs cover: PSNR ${psnrStr} · SSIM ${state.encodeSsim.toFixed(4)}\n` +
     `Encode: ${state.encodeMs.toFixed(1)} ms · Decode: ${state.decodeMs.toFixed(1)} ms\n` +
     `\n` +
     `H   (128b): ${hex(H_bytes)}\n` +
