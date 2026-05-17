@@ -383,7 +383,30 @@ function refreshDecSource() {
   if (!lastOk && $('dec-srcLast').checked) $('dec-srcUpload').checked = true;
   const src = document.querySelector('input[name="ih-dec-source"]:checked')?.value;
   $('dec-drop').classList.toggle('is-hidden', src !== 'upload');
+  updateDecPreview();
   refreshDecRun();
+}
+
+// Show the currently-chosen decode input as a 14rem preview, matching the
+// cover preview on the encode side. This is the user's INPUT image — not the
+// post-attack one. The attack effect is implicit in the dropdown selection.
+function updateDecPreview() {
+  const src = document.querySelector('input[name="ih-dec-source"]:checked')?.value;
+  const wrap = $('dec-srcPreview');
+  const canvas = $('dec-srcCanvas');
+  const name = $('dec-srcName');
+  let img = null, label = '';
+  if (src === 'last' && lastContainer) {
+    img = lastContainer;
+    label = `last container · ${img.width}×${img.height}`;
+  } else if (src === 'upload' && dec.upload) {
+    img = dec.upload;
+    label = `uploaded · ${img.width}×${img.height}`;
+  }
+  if (!img) { wrap.classList.add('is-hidden'); return; }
+  drawToCanvas(canvas, img);
+  name.textContent = label;
+  wrap.classList.remove('is-hidden');
 }
 
 async function loadDecFile(file) {
@@ -434,11 +457,6 @@ async function runDecode() {
       setStatus('dec', `Applying ${attackLabel}…`);
       attacked = await a.fn(core);
     }
-
-    drawToCanvas($('dec-preview'), attacked);
-    $('dec-previewLabel').textContent = attackId === 'none'
-      ? 'decoded image (no attack)'
-      : `decoded image after ${attackLabel}`;
 
     setStatus('dec', `Decoding ${attacked.width}×${attacked.height}…`);
     const { bits: recBits, ms } = await decode(attacked);

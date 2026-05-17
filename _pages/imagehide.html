@@ -126,6 +126,13 @@ lede: "Embed 896 invisible bits into any image, then recover them after a JPEG r
             <div class="ih-drop__big">Drop, or <span class="ih-link">browse</span></div>
           </div>
         </div>
+
+        <div id="ih-dec-srcPreview" class="ih-preview is-hidden">
+          <canvas id="ih-dec-srcCanvas"></canvas>
+          <div class="ih-preview__meta">
+            <span id="ih-dec-srcName">image</span>
+          </div>
+        </div>
       </div>
 
       <div class="ih-section">
@@ -152,13 +159,6 @@ lede: "Embed 896 invisible bits into any image, then recover them after a JPEG r
             <div class="ih-stat__val" id="ih-d-ms">—</div>
             <div class="ih-stat__lbl">decode time</div>
           </div>
-        </div>
-
-        <div class="ih-canvases ih-canvases--single">
-          <figure>
-            <canvas id="ih-dec-preview"></canvas>
-            <figcaption id="ih-dec-previewLabel">decoded image</figcaption>
-          </figure>
         </div>
 
         <details class="ih-details">
