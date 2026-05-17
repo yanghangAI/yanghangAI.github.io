@@ -39,6 +39,31 @@ lede: "Live demo of the MWIP (Minimal Whole-Image Provenance) INN watermark. Upl
 
   <pre id="ih-oneshot" class="imagehide__oneshot">One-shot stats will appear here after encoding.</pre>
 
+  <div class="imagehide__controls">
+    <strong>Attacks:</strong>
+    <span id="ih-attackList"></span>
+    <button id="ih-runBtn" class="primary" disabled>Run</button>
+  </div>
+
+  <table class="imagehide__results">
+    <thead>
+      <tr>
+        <th>Attack</th>
+        <th class="num">PSNR</th>
+        <th class="num">SSIM</th>
+        <th class="num">Bit acc</th>
+        <th>Sig</th>
+      </tr>
+    </thead>
+    <tbody id="ih-resultsBody"></tbody>
+  </table>
+
+  <p style="margin-top:1.5rem;font-size:0.95rem;color:#555;">
+    <em>Out of scope for this model:</em> crop, rotate, Gaussian noise, Gaussian blur. The MWIP encoder targets the canonical-delivery scope (JPEG + benign down-up resize).
+  </p>
+
+  <hr style="margin:2rem 0 1.2rem;border:0;border-top:1px solid #ddd;">
+
   <p class="imagehide__perf-note">
     <strong>Where this runs.</strong> All encoding and decoding executes in your browser via ONNX Runtime Web in a Web Worker. Your image is never uploaded; no server is involved.
   </p>
@@ -70,29 +95,6 @@ lede: "Live demo of the MWIP (Minimal Whole-Image Provenance) INN watermark. Upl
       <tr><td>Full-frame DSLR</td>          <td>7008 × 4672 (33&nbsp;MP)</td>  <td>~2.7&nbsp;s</td>  <td>~190&nbsp;ms</td> <td>~830&nbsp;ms</td></tr>
     </tbody>
   </table>
-
-  <div class="imagehide__controls">
-    <strong>Attacks:</strong>
-    <span id="ih-attackList"></span>
-    <button id="ih-runBtn" class="primary" disabled>Run</button>
-  </div>
-
-  <table class="imagehide__results">
-    <thead>
-      <tr>
-        <th>Attack</th>
-        <th class="num">PSNR</th>
-        <th class="num">SSIM</th>
-        <th class="num">Bit acc</th>
-        <th>Sig</th>
-      </tr>
-    </thead>
-    <tbody id="ih-resultsBody"></tbody>
-  </table>
-
-  <p style="margin-top:1.5rem;font-size:0.95rem;color:#555;">
-    <em>Out of scope for this model:</em> crop, rotate, Gaussian noise, Gaussian blur. The MWIP encoder targets the canonical-delivery scope (JPEG + benign down-up resize).
-  </p>
 
 </section>
 
