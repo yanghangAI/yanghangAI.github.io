@@ -1,77 +1,85 @@
 /**
- * ONNX Runtime Web wrapper for the MWIP encoder/decoder graphs.
+ * Worker-backed inference pipeline.
  *
- * Encoder input:  host_rgb tensor [1, 3, H, W] float32 in [-1, 1]
- *                 bits     tensor [1, 896]     float32 in {0, 1}
- * Encoder output: container_rgb [1, 3, H, W] float32 in [-1, 1]
+ * All ONNX inference runs in a Web Worker so we can `worker.terminate()`
+ * between attack batches and reclaim WASM linear memory — the only browser
+ * mechanism that actually shrinks WASM heap (it doesn't have a free/shrink
+ * API). The model bytes are cached in main-thread memory so re-spawning the
+ * worker is just session-create, not a network fetch.
  *
- * Decoder input:  container_rgb [1, 3, H, W] float32 in [-1, 1]
- * Decoder output: bit_logits   [1, 896]    float32 (apply sigmoid + 0.5 threshold)
- *
- * Backend: WebGPU when available, falls back to WASM. Surface the active
- * backend via getBackend() so the UI can warn users on the slow path.
+ * Public API:
+ *   getBackend()                  → 'wasm' | 'webgpu'
+ *   loadModels(encoderUrl, decoderUrl, onProgress)
+ *   encode(coverImageData, bitsUint8) → { container, ms }
+ *   decode(containerImageData)        → { bits, ms }
+ *   releaseSession()              → terminates worker; bytes kept cached
  */
 
-let ort = null;          // loaded lazily
-let encoderSession = null;
-let decoderSession = null;
-let activeBackend = null;
-let loadPromise = null;
+let worker = null;
+let workerReady = false;
+let encoderBuf = null;
+let decoderBuf = null;
+let activeBackend = 'wasm';   // worker uses WASM; reported to UI for honesty
+let nextMsgId = 1;
+const pending = new Map();
 
-// Use the WebGPU bundle everywhere. It contains both WebGPU and WASM providers,
-// so when WebGPU init fails we fall back transparently. The previous "use the
-// plain bundle on mobile" path was a workaround for an iOS Safari issue at
-// larger input sizes; with the demo now capping mobile input to 0.5 MP, WebGPU
-// init usually succeeds on iOS 17.4+ and is far faster than WASM.
-const ORT_VERSION = '1.20.0';
-const ORT_BASE = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
-const ORT_BUNDLE = `${ORT_BASE}ort.webgpu.min.mjs`;
+const WORKER_URL = new URL('./decoder-worker.js', import.meta.url);
 
-async function detectWebGPU() {
-  if (!('gpu' in navigator)) return false;
-  try {
-    const adapter = await navigator.gpu.requestAdapter();
-    return !!adapter;
-  } catch { return false; }
+function ensureWorker() {
+  if (worker) return worker;
+  worker = new Worker(WORKER_URL, { type: 'module' });
+  worker.addEventListener('message', e => {
+    const msg = e.data;
+    const p = pending.get(msg.id);
+    if (!p) return;
+    pending.delete(msg.id);
+    if (msg.type === 'error') p.reject(new Error(msg.message));
+    else p.resolve(msg);
+  });
+  worker.addEventListener('error', e => {
+    // Surface uncaught worker errors to all pending promises
+    const err = new Error(`worker error: ${e.message || 'unknown'}`);
+    for (const p of pending.values()) p.reject(err);
+    pending.clear();
+  });
+  return worker;
 }
 
-async function createSession(buf, providers) {
-  return ort.InferenceSession.create(buf, { executionProviders: providers });
+function send(msg, transfer = []) {
+  const w = ensureWorker();
+  msg.id = nextMsgId++;
+  return new Promise((resolve, reject) => {
+    pending.set(msg.id, { resolve, reject });
+    w.postMessage(msg, transfer);
+  });
 }
 
 export function getBackend() { return activeBackend; }
 
 export async function loadModels(encoderUrl, decoderUrl, onProgress) {
-  if (loadPromise) return loadPromise;
-  loadPromise = (async () => {
-    if (!ort) ort = await import(/* @vite-ignore */ ORT_BUNDLE);
-    if (ort.env && ort.env.wasm) ort.env.wasm.wasmPaths = ORT_BASE;
+  if (!encoderBuf || !decoderBuf) {
     const [encBuf, decBuf] = await Promise.all([
       fetchWithProgress(encoderUrl, onProgress, 'encoder'),
       fetchWithProgress(decoderUrl, onProgress, 'decoder'),
     ]);
-    // Try WebGPU first. If session creation throws (iOS Safari has been seen to
-    // OOM at WebGPU init), fall back to WASM transparently.
-    if (await detectWebGPU()) {
-      try {
-        encoderSession = await createSession(encBuf, ['webgpu', 'wasm']);
-        decoderSession = await createSession(decBuf, ['webgpu', 'wasm']);
-        activeBackend = 'webgpu';
-        return;
-      } catch (e) {
-        console.warn('WebGPU session create failed, falling back to WASM:', e);
-        // Sessions may be partially initialized — release before retrying.
-        try { encoderSession?.release?.(); } catch (_) {}
-        try { decoderSession?.release?.(); } catch (_) {}
-        encoderSession = null;
-        decoderSession = null;
-      }
-    }
-    encoderSession = await createSession(encBuf, ['wasm']);
-    decoderSession = await createSession(decBuf, ['wasm']);
-    activeBackend = 'wasm';
-  })();
-  return loadPromise;
+    encoderBuf = encBuf;
+    decoderBuf = decBuf;
+  }
+  await initWorker();
+}
+
+async function initWorker() {
+  if (workerReady) return;
+  ensureWorker();
+  // Send clones (slice copies the buffer) and transfer the clones so the
+  // worker takes ownership; we keep the originals for the next batch.
+  const encClone = encoderBuf.slice(0);
+  const decClone = decoderBuf.slice(0);
+  await send(
+    { type: 'init', encoderBuf: encClone, decoderBuf: decClone },
+    [encClone, decClone],
+  );
+  workerReady = true;
 }
 
 async function fetchWithProgress(url, cb, tag) {
@@ -94,86 +102,46 @@ async function fetchWithProgress(url, cb, tag) {
   return buf.buffer;
 }
 
-// ---------- tensor helpers ----------
-
-function imageDataToFloat32CHW(imageData) {
-  // RGBA [0..255] → CHW [-1..1] float32
-  const { data, width: W, height: H } = imageData;
-  const out = new Float32Array(3 * H * W);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const i = (y * W + x) * 4;
-      const pi = y * W + x;
-      out[0 * H * W + pi] = (data[i]     / 127.5) - 1;
-      out[1 * H * W + pi] = (data[i + 1] / 127.5) - 1;
-      out[2 * H * W + pi] = (data[i + 2] / 127.5) - 1;
-    }
-  }
-  return out;
-}
-
-function float32CHWtoImageData(arr, W, H) {
-  const data = new Uint8ClampedArray(H * W * 4);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const pi = y * W + x;
-      const i = pi * 4;
-      data[i]     = Math.round(Math.min(255, Math.max(0, (arr[0 * H * W + pi] + 1) * 127.5)));
-      data[i + 1] = Math.round(Math.min(255, Math.max(0, (arr[1 * H * W + pi] + 1) * 127.5)));
-      data[i + 2] = Math.round(Math.min(255, Math.max(0, (arr[2 * H * W + pi] + 1) * 127.5)));
-      data[i + 3] = 255;
-    }
-  }
-  return { data, width: W, height: H };
-}
-
-function bitsToFloat32(bitsUint8) {
-  const out = new Float32Array(bitsUint8.length);
-  for (let i = 0; i < bitsUint8.length; i++) out[i] = bitsUint8[i];
-  return out;
-}
-
-// ---------- public API ----------
-
-function disposeTensor(t) {
-  // WebGPU tensors hold GPU buffers that JS GC cannot free; CPU/WASM tensors
-  // gain nothing from dispose() but it's safe to call.
-  if (t && typeof t.dispose === 'function') {
-    try { t.dispose(); } catch (_) { /* ignore */ }
-  }
-}
-
 export async function encode(coverImageData, bitsUint8) {
-  if (!encoderSession) throw new Error('encoder not loaded');
+  if (!workerReady) await initWorker();
   const W = coverImageData.width, H = coverImageData.height;
-  const imgArr = imageDataToFloat32CHW(coverImageData);
-  const imgT = new ort.Tensor('float32', imgArr, [1, 3, H, W]);
-  const bitsT = new ort.Tensor('float32', bitsToFloat32(bitsUint8), [1, bitsUint8.length]);
-  const t0 = performance.now();
-  const { container_rgb } = await encoderSession.run({ host_rgb: imgT, bits: bitsT });
-  const dt = performance.now() - t0;
-  const container = float32CHWtoImageData(container_rgb.data, W, H);
-  disposeTensor(imgT);
-  disposeTensor(bitsT);
-  disposeTensor(container_rgb);
-  return { container, ms: dt };
+  // We must transfer; the caller can no longer use these buffers. We slice to
+  // copy so the caller's ImageData stays usable.
+  const imageBuf = coverImageData.data.buffer.slice(0);
+  const bitsBuf  = bitsUint8.buffer.slice(0);
+  const r = await send(
+    { type: 'encode', imageBuf, W, H, bitsBuf },
+    [imageBuf, bitsBuf],
+  );
+  return {
+    container: { data: new Uint8ClampedArray(r.imageBuf), width: W, height: H },
+    ms: r.ms,
+  };
 }
 
 export async function decode(containerImageData) {
-  if (!decoderSession) throw new Error('decoder not loaded');
+  if (!workerReady) await initWorker();
   const W = containerImageData.width, H = containerImageData.height;
-  const arr = imageDataToFloat32CHW(containerImageData);
-  const t = new ort.Tensor('float32', arr, [1, 3, H, W]);
-  const t0 = performance.now();
-  const { bit_logits } = await decoderSession.run({ container_rgb: t });
-  const dt = performance.now() - t0;
-  const src = bit_logits.data;
-  const bits = new Uint8Array(src.length);
-  for (let i = 0; i < bits.length; i++) {
-    const s = 1 / (1 + Math.exp(-src[i]));
-    bits[i] = s > 0.5 ? 1 : 0;
+  const imageBuf = containerImageData.data.buffer.slice(0);
+  const r = await send(
+    { type: 'decode', imageBuf, W, H },
+    [imageBuf],
+  );
+  return { bits: new Uint8Array(r.bitsBuf), ms: r.ms };
+}
+
+/**
+ * Terminate the worker, releasing its WASM heap back to the OS. The cached
+ * model bytes are kept in main memory so the next `encode`/`decode` call will
+ * lazily re-spawn the worker via `initWorker()`.
+ */
+export function releaseSession() {
+  if (worker) {
+    worker.terminate();
+    worker = null;
   }
-  disposeTensor(t);
-  disposeTensor(bit_logits);
-  return { bits, ms: dt };
+  workerReady = false;
+  // Reject any pending operations
+  for (const p of pending.values()) p.reject(new Error('session released'));
+  pending.clear();
 }

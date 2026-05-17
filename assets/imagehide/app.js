@@ -2,7 +2,7 @@ import { computeCrop, splitTrim, pasteBack } from './trim.js';
 import { phash128, packPayload, unpackPayload, bitAccuracy, N_H } from './payload.js';
 import { psnr, ssim } from './metrics.js';
 import { ATTACKS } from './attacks.js';
-import { loadModels, encode, decode, getBackend } from './pipeline.js';
+import { loadModels, encode, decode, getBackend, releaseSession } from './pipeline.js';
 
 const LIBSODIUM_CDN = 'https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/+esm';
 const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -310,5 +310,8 @@ async function runAttacks() {
     }
     row.classList.remove('running');
   }
-  setStatus('Done.');
+  // Terminate the inference worker so its WASM heap is released to the OS.
+  // The next Run will re-spawn it cheaply from the cached model bytes.
+  releaseSession();
+  setStatus('Done. (worker terminated; WASM memory freed)');
 }
