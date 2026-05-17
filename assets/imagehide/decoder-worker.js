@@ -31,12 +31,30 @@ const ORT_BASE = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/di
 // WebGPU bundle includes the WASM provider as fallback.
 const ORT_BUNDLE = `${ORT_BASE}ort.webgpu.min.mjs`;
 
+function isSafari() {
+  // Safari (and all iOS browsers, which use WebKit) — UA contains "Safari" but
+  // not "Chrome" or "CriOS" or "FxiOS". WebKit doesn't reliably support
+  // WebGPU in DedicatedWorkers as of 2026: the API may be present but
+  // requestAdapter / InferenceSession can hang. Skip WebGPU on Safari.
+  const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+  return /Safari/.test(ua) && !/Chrome|Chromium|CriOS|FxiOS|Edg\//.test(ua);
+}
+
 async function detectWebGPU() {
   if (typeof navigator === 'undefined' || !('gpu' in navigator)) return false;
+  if (isSafari()) return false;
   try {
     const adapter = await navigator.gpu.requestAdapter();
     return !!adapter;
   } catch { return false; }
+}
+
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms}ms`)), ms)),
+  ]);
 }
 
 function disposeTensor(t) {
@@ -87,14 +105,18 @@ async function handle(msg) {
     const decBytes = new Uint8Array(msg.decoderBuf);
     if (tryWebGPU) {
       try {
-        encoderSession = await ort.InferenceSession.create(
-          encBytes, { executionProviders: ['webgpu', 'wasm'] });
-        decoderSession = await ort.InferenceSession.create(
-          decBytes, { executionProviders: ['webgpu', 'wasm'] });
+        // 10s timeout — if WebGPU session create stalls (Safari has been seen
+        // to hang here), fall back to WASM rather than hanging the page.
+        encoderSession = await withTimeout(
+          ort.InferenceSession.create(encBytes, { executionProviders: ['webgpu', 'wasm'] }),
+          10000, 'encoder webgpu init');
+        decoderSession = await withTimeout(
+          ort.InferenceSession.create(decBytes, { executionProviders: ['webgpu', 'wasm'] }),
+          10000, 'decoder webgpu init');
         activeBackend = 'webgpu';
         return { type: 'ready', backend: activeBackend, transfer: [] };
       } catch (e) {
-        // WebGPU session create failed — wipe partial state, fall through to WASM.
+        // WebGPU session create failed or timed out — wipe partial state, fall through to WASM.
         try { encoderSession?.release?.(); } catch (_) {}
         try { decoderSession?.release?.(); } catch (_) {}
         encoderSession = null;
