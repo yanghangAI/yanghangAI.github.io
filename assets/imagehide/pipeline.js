@@ -90,24 +90,40 @@ export async function loadModels(encoderUrl, decoderUrl, onProgress,
   if (eagerInit) await ensureMode('encoder');
 }
 
-async function ensureMode(mode) {
-  if (workerMode === mode && worker) return;
-  // Switching modes (or first use): tear down any existing worker so the
-  // WASM heap of the prior session is fully released before we load the next.
-  if (worker) {
-    worker.terminate();
-    worker = null;
-  }
+async function _spawnAndInit(mode, opts) {
+  if (worker) { worker.terminate(); worker = null; }
   workerMode = null;
   ensureWorker();
   const buf = mode === 'encoder' ? encoderBuf : decoderBuf;
   const clone = buf.slice(0);
   const reply = await send(
-    { type: 'init', mode, modelBuf: clone },
+    { type: 'init', mode, modelBuf: clone, ...(opts || {}) },
     [clone],
   );
   if (reply.backend) activeBackend = reply.backend;
   workerMode = mode;
+}
+
+async function ensureMode(mode) {
+  if (workerMode === mode && worker) return;
+  try {
+    await _spawnAndInit(mode);
+  } catch (e) {
+    // ORT-Web's WASM init can get marked as permanently failed when the
+    // ['webgpu', 'wasm'] provider list crashes halfway — typical on iOS
+    // Safari, where WebGPU may fail to create a session for some op and
+    // leave WASM init in a "previous call to initWasm() failed" state.
+    // The failure is cached on the ORT instance, which lives inside the
+    // worker, so respawning the worker and retrying with WebGPU disabled
+    // gives us a clean ORT instance with no poisoned cache.
+    const m = e && e.message ? e.message : '';
+    if (/initWasm|no available backend|previous call/i.test(m)) {
+      console.warn('[imagehide] worker init failed, respawning WASM-only:', m);
+      await _spawnAndInit(mode, { forceWasm: true });
+    } else {
+      throw e;
+    }
+  }
 }
 
 async function fetchWithProgress(url, cb, tag) {

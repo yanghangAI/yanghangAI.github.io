@@ -102,14 +102,14 @@ function imageBufToFloat32CHW(buf, W, H) {
 
 async function handle(msg) {
   if (msg.type === 'init') {
-    diag(`init received for mode=${msg.mode}`);
+    diag(`init received for mode=${msg.mode}${msg.forceWasm ? ' forceWasm=true' : ''}`);
     if (!ort) {
       ort = await import(ORT_BUNDLE);
       if (ort.env && ort.env.wasm) ort.env.wasm.wasmPaths = ORT_BASE;
     }
-    const { mode, modelBuf } = msg;
+    const { mode, modelBuf, forceWasm } = msg;
     const bytes = new Uint8Array(modelBuf);
-    const tryWebGPU = await detectWebGPU();
+    const tryWebGPU = !forceWasm && (await detectWebGPU());
     if (tryWebGPU) {
       try {
         const t0 = performance.now();
