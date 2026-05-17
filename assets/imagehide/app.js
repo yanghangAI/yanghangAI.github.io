@@ -1,4 +1,4 @@
-// Versioned dynamic imports so a redeploy busts every cached sibling.
+// Versioned dynamic imports so a redeploy busts cached siblings.
 const V = (typeof window !== 'undefined' && window.__imagehideVersion) || 'dev';
 const { computeCrop, splitTrim, pasteBack } = await import(`./trim.js?v=${V}`);
 const { phash128, packPayload, unpackPayload, bitAccuracy, bitsToBytes,
@@ -12,8 +12,8 @@ const LIBSODIUM_CDN = 'https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/+e
 const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const MAX_INPUT_PIXELS = IS_MOBILE ? 0.5 * 1024 * 1024 : 1 * 1024 * 1024;
 
-// ---------- shared state ----------
 const $ = (id) => document.getElementById(`ih-${id}`);
+
 let sodium = null, demoKeypair = null;
 let modelStatus = 'idle';
 
@@ -21,72 +21,35 @@ let lastContainer = null;
 let lastPayloadBits = null;
 
 const enc = { cover: null, origW: 0, origH: 0, crop: null, busy: false };
-const dec = { upload: null, attackId: 'none', busy: false };
+const dec = { upload: null, busy: false };
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else { init(); }
 
-// ============================================================================
-// INIT
-// ============================================================================
 function init() {
-  initTabs();
-  initEncodePane();
-  initDecodePane();
+  initEncode();
+  initDecode();
   loadInfra();
-}
-
-function initTabs() {
-  document.querySelectorAll('.ih-tab').forEach(btn => {
-    btn.addEventListener('click', () => switchMode(btn.dataset.mode));
-  });
-}
-
-function switchMode(mode) {
-  document.querySelectorAll('.ih-tab').forEach(b => {
-    const on = b.dataset.mode === mode;
-    b.classList.toggle('is-active', on);
-    b.setAttribute('aria-selected', on ? 'true' : 'false');
-  });
-  document.querySelectorAll('.ih-pane').forEach(p => {
-    p.classList.toggle('is-hidden', p.dataset.pane !== mode);
-  });
-  releaseSession();
-}
-
-function setGlobalStatus(text, cls) {
-  const el = $('globalStatus');
-  el.textContent = text;
-  el.className = 'ih-tabs__status' + (cls ? ' ' + cls : '');
-}
-
-function setRunStatus(which, html, isWarn = false) {
-  const el = $(`${which}-status`);
-  el.innerHTML = html;
-  el.classList.toggle('is-warn', isWarn);
 }
 
 // ---------- model + sodium ----------
 async function loadInfra() {
   modelStatus = 'loading';
-  setGlobalStatus('loading model… 0%');
+  setGlobalBar('loading model…');
   try {
     await Promise.all([loadSodium(), loadModel()]);
     modelStatus = 'ready';
-    setGlobalStatus(`ready · ${getBackend()}`, 'is-ready');
-    setRunStatus('enc', 'Ready. Pick or drop a cover image.');
-    setRunStatus('dec', 'Ready. Encode something first, or upload a watermarked image.');
-    refreshEncRunBtn();
-    refreshDecRunBtn();
-    // Auto-prime the cover preview with the sample so a curious visitor can
-    // click Encode immediately without uploading.
+    setGlobalBar(`ready · running on ${getBackend()}${IS_MOBILE ? ' (mobile cap 0.5 MP)' : ' (desktop cap 1 MP)'}`, 'is-ready');
+    setStatus('enc', 'Ready. Drop a cover image, or use the sample.');
+    setStatus('dec', 'Ready. Encode something first, or upload a watermarked image.');
+    refreshEncRun(); refreshDecRun();
     if (!enc.cover) loadEncSample(true);
   } catch (e) {
     modelStatus = 'error';
-    setGlobalStatus('model load failed', 'is-error');
-    setRunStatus('enc', `Model load failed: ${e.message}`, true);
-    setRunStatus('dec', `Model load failed: ${e.message}`, true);
+    setGlobalBar(`model load failed: ${e.message}`, 'is-error');
+    setStatus('enc', `Model load failed: ${e.message}`, true);
+    setStatus('dec', `Model load failed: ${e.message}`, true);
   }
 }
 
@@ -98,23 +61,35 @@ async function loadSodium() {
   demoKeypair = sodium.crypto_sign_keypair();
 }
 
-const modelProgress = { encoder: 0, decoder: 0, total: { encoder: 0, decoder: 0 } };
+const mp = { encoder: 0, decoder: 0, total: { encoder: 0, decoder: 0 } };
 async function loadModel() {
   await loadModels(
     '/assets/imagehide/encoder.onnx',
     '/assets/imagehide/decoder.onnx',
     ({ tag, loaded, total }) => {
-      modelProgress[tag] = loaded;
-      if (total) modelProgress.total[tag] = total;
-      const sum = modelProgress.encoder + modelProgress.decoder;
-      const tot = modelProgress.total.encoder + modelProgress.total.decoder;
+      mp[tag] = loaded;
+      if (total) mp.total[tag] = total;
+      const sum = mp.encoder + mp.decoder;
+      const tot = mp.total.encoder + mp.total.decoder;
       const pct = tot ? Math.round(100 * sum / tot) : 0;
-      setGlobalStatus(`loading model · ${pct}% (${(sum/1e6).toFixed(1)}/${(tot/1e6).toFixed(1)} MB)`);
+      setGlobalBar(`loading model · ${pct}% (${(sum/1e6).toFixed(1)}/${(tot/1e6).toFixed(1)} MB)`);
     },
   );
 }
 
 // ---------- helpers ----------
+function setGlobalBar(text, cls = '') {
+  const el = document.getElementById('ih-globalbar');
+  document.getElementById('ih-globalbar-text').textContent = text;
+  el.className = 'ih-globalbar' + (cls ? ' ' + cls : '');
+}
+
+function setStatus(which, html, isWarn = false) {
+  const el = $(`${which}-status`);
+  el.innerHTML = html;
+  el.classList.toggle('is-warn', isWarn);
+}
+
 function bitmapToFitted(bitmap) {
   const origW = bitmap.width, origH = bitmap.height;
   let w = origW, h = origH;
@@ -141,19 +116,18 @@ function drawToCanvas(canvas, imageData) {
     new ImageData(imageData.data, imageData.width, imageData.height), 0, 0);
 }
 
-function drawThumb(canvas, imageData, maxSize = 88) {
+function drawThumb(canvas, imageData, sz = 88) {
   const W = imageData.width, H = imageData.height;
-  const s = Math.min(1, maxSize / Math.max(W, H));
-  const tw = Math.max(1, Math.round(W * s));
-  const th = Math.max(1, Math.round(H * s));
-  canvas.width = tw; canvas.height = th;
   const off = new OffscreenCanvas(W, H);
   off.getContext('2d').putImageData(
     new ImageData(imageData.data, W, H), 0, 0);
+  canvas.width = sz; canvas.height = sz;
   const ctx = canvas.getContext('2d');
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'medium';
-  ctx.drawImage(off, 0, 0, tw, th);
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'medium';
+  // Cover-fit (crop center).
+  const scale = Math.max(sz / W, sz / H);
+  const dw = W * scale, dh = H * scale;
+  ctx.drawImage(off, (sz - dw)/2, (sz - dh)/2, dw, dh);
   off.width = 0; off.height = 0;
 }
 
@@ -180,26 +154,13 @@ function parseCustomBits(text) {
     }
     return bits;
   }
-  throw new Error(`bits must be ${N_BITS} 0/1 chars or ${N_BITS/4} hex chars`);
+  throw new Error(`paste ${N_BITS} 0/1 chars or ${N_BITS/4} hex chars`);
 }
 
-// Generic radio "segmented" sync helper.
-function bindSegmented(name, onChange) {
-  document.querySelectorAll(`input[name="${name}"]`).forEach(r => {
-    r.addEventListener('change', () => {
-      document.querySelectorAll(`.ih-segmented__opt`).forEach(o => {
-        const input = o.querySelector(`input[name="${name}"]`);
-        if (input) o.classList.toggle('is-active', input.checked);
-      });
-      onChange && onChange(document.querySelector(`input[name="${name}"]:checked`).value);
-    });
-  });
-}
-
-// ============================================================================
-// ENCODE PANE
-// ============================================================================
-function initEncodePane() {
+// ===========================================================================
+// ENCODE
+// ===========================================================================
+function initEncode() {
   const drop = $('enc-drop');
   $('enc-file').addEventListener('change', e => loadEncFile(e.target.files?.[0]));
   drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('is-dragover'); });
@@ -209,42 +170,39 @@ function initEncodePane() {
     loadEncFile(e.dataTransfer.files?.[0]);
   });
   $('enc-sample').addEventListener('click', e => { e.preventDefault(); loadEncSample(false); });
-  $('enc-thumb-clear').addEventListener('click', clearEncCover);
-
+  $('enc-clear').addEventListener('click', clearEncCover);
   $('enc-runBtn').addEventListener('click', runEncode);
   $('enc-downloadBtn').addEventListener('click', downloadContainer);
-  $('enc-toDecodeBtn').addEventListener('click', () => {
-    switchMode('decode');
-    // Default to "last container" if available.
-    $('dec-srcLast').checked = true;
-    refreshDecodeSource();
-  });
+  $('enc-toDecodeBtn').addEventListener('click', sendToDecode);
 
-  bindSegmented('ih-bits-source', (val) => {
-    $('enc-customBits').classList.toggle('is-hidden', val !== 'custom');
+  document.querySelectorAll('input[name="ih-bits-source"]').forEach(r => {
+    r.addEventListener('change', () => {
+      const val = document.querySelector('input[name="ih-bits-source"]:checked').value;
+      $('enc-customBits').classList.toggle('is-hidden', val !== 'custom');
+    });
   });
 }
 
 async function loadEncFile(file) {
   if (!file) return;
-  setRunStatus('enc', `Loading ${file.name}…`);
+  setStatus('enc', `Loading ${file.name}…`);
   try {
     const bitmap = await createImageBitmap(file);
     onEncImage(bitmapToFitted(bitmap), file.name);
   } catch (e) {
-    setRunStatus('enc', `Failed to load: ${e.message}`, true);
+    setStatus('enc', `Failed to load: ${e.message}`, true);
   }
 }
 
 async function loadEncSample(silent) {
-  if (!silent) setRunStatus('enc', 'Loading sample…');
+  if (!silent) setStatus('enc', 'Loading sample…');
   try {
     const resp = await fetch('/assets/imagehide/sample-cover.jpg');
     const blob = await resp.blob();
     const bitmap = await createImageBitmap(blob);
-    onEncImage(bitmapToFitted(bitmap), 'sample-cover.jpg');
+    onEncImage(bitmapToFitted(bitmap), 'sample.jpg');
   } catch (e) {
-    if (!silent) setRunStatus('enc', `Failed to load sample: ${e.message}`, true);
+    if (!silent) setStatus('enc', `Failed to load sample: ${e.message}`, true);
   }
 }
 
@@ -254,33 +212,34 @@ function onEncImage({ imageData, origW, origH }, name) {
   enc.crop = computeCrop(imageData.height, imageData.width);
 
   drawThumb($('cover'), imageData);
-  $('enc-thumb-name').textContent = `${name} · ${imageData.width}×${imageData.height}` +
-    (origW !== imageData.width ? ` (from ${origW}×${origH})` : '');
-  $('enc-thumb').classList.remove('is-hidden');
-  $('enc-drop').querySelector('.ih-drop__cta').classList.add('is-hidden');
+  const dim = `${imageData.width}×${imageData.height}` +
+    (origW !== imageData.width ? ` · from ${origW}×${origH}` : '');
+  $('enc-name').textContent = `${name} · ${dim}`;
+  $('enc-preview').classList.remove('is-hidden');
+  $('enc-drop').classList.add('is-hidden');
 
-  setRunStatus('enc', `Will encode a ${enc.crop.cropW}×${enc.crop.cropH} region (multiple of 64).`);
-  refreshEncRunBtn();
+  setStatus('enc', `Will encode ${enc.crop.cropW}×${enc.crop.cropH} region. Click Encode.`);
+  refreshEncRun();
 }
 
 function clearEncCover(e) {
   e?.preventDefault?.();
   enc.cover = null; enc.crop = null;
-  $('enc-thumb').classList.add('is-hidden');
-  $('enc-drop').querySelector('.ih-drop__cta').classList.remove('is-hidden');
+  $('enc-preview').classList.add('is-hidden');
+  $('enc-drop').classList.remove('is-hidden');
   $('enc-file').value = '';
-  setRunStatus('enc', 'Pick or drop a cover image.');
-  refreshEncRunBtn();
+  setStatus('enc', 'Pick or drop a cover image.');
+  refreshEncRun();
 }
 
-function refreshEncRunBtn() {
+function refreshEncRun() {
   $('enc-runBtn').disabled = !(modelStatus === 'ready' && enc.cover && !enc.busy);
 }
 
 async function runEncode() {
   if (enc.busy) return;
-  enc.busy = true; refreshEncRunBtn();
-  setRunStatus('enc', 'Encoding…');
+  enc.busy = true; refreshEncRun();
+  setStatus('enc', 'Encoding…');
 
   try {
     const source = document.querySelector('input[name="ih-bits-source"]:checked').value;
@@ -316,31 +275,27 @@ async function runEncode() {
     drawToCanvas($('container'), fullContainer);
     drawResidual($('residual'), core, container, 10);
 
-    $('m-psnr').textContent = isFinite(psnrV) ? `${psnrV.toFixed(1)}` : '∞';
+    $('m-psnr').textContent = isFinite(psnrV) ? psnrV.toFixed(1) : '∞';
     $('m-ssim').textContent = ssimV.toFixed(4);
-    $('m-ms').textContent = `${ms.toFixed(0)} ms`;
-    $('m-size').textContent = `${enc.crop.cropW}×${enc.crop.cropH}`;
+    $('m-ms').textContent = `${ms.toFixed(0)} ms`;
 
     $('oneshot').textContent =
-      `image: ${enc.origW}×${enc.origH} → encoded region ${enc.crop.cropW}×${enc.crop.cropH}\n` +
-      `payload: ${source} (${N_BITS} bits = ${N_H} H | ${N_SIG} sig | 256 pk)\n` +
-      `\n` +
+      `image:   ${enc.origW}×${enc.origH} → encoded region ${enc.crop.cropW}×${enc.crop.cropH}\n` +
+      `payload: ${source} (${N_BITS} bits)\n\n` +
       `H   : ${hex(parts.H)}\n` +
       `sig : ${hex(parts.sig)}\n` +
-      `pk  : ${hex(parts.pk)}\n` +
-      `\n` +
+      `pk  : ${hex(parts.pk)}\n\n` +
       `bits: ${Array.from(bits).join('')}`;
 
     $('enc-results').classList.remove('is-hidden');
-    $('enc-results').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
     releaseSession();
-    refreshDecodeSource();
-    setRunStatus('enc', `Done · ${ms.toFixed(0)} ms.`);
+    refreshDecSource();
+    setStatus('enc', `Done · ${ms.toFixed(0)} ms.`);
   } catch (e) {
-    setRunStatus('enc', `Encode failed: ${e.message}`, true);
+    setStatus('enc', `Encode failed: ${e.message}`, true);
   } finally {
-    enc.busy = false; refreshEncRunBtn();
+    enc.busy = false; refreshEncRun();
   }
 }
 
@@ -372,82 +327,83 @@ async function downloadContainer() {
   URL.revokeObjectURL(url);
 }
 
-// ============================================================================
-// DECODE PANE
-// ============================================================================
-function initDecodePane() {
-  // Build attack chips: catalog + an explicit "none" entry up front.
-  const opts = [
-    { id: 'none', label: 'none' },
-    ...ATTACKS.filter(a => a.id !== 'identity'),
-  ];
-  $('dec-attackChips').innerHTML = opts.map((o, i) =>
-    `<button type="button" class="ih-chip ${i === 0 ? 'is-active' : ''}" data-attack="${o.id}">${o.label}</button>`
-  ).join('');
-  $('dec-attackChips').addEventListener('click', e => {
-    const btn = e.target.closest('.ih-chip');
-    if (!btn) return;
-    $('dec-attackChips').querySelectorAll('.ih-chip').forEach(c => c.classList.remove('is-active'));
-    btn.classList.add('is-active');
-    dec.attackId = btn.dataset.attack;
-  });
-
-  $('dec-file').addEventListener('change', e => loadDecFile(e.target.files?.[0]));
-  $('dec-runBtn').addEventListener('click', runDecode);
-
-  bindSegmented('ih-dec-source', (val) => {
-    $('dec-drop').classList.toggle('is-hidden', val !== 'upload');
-    refreshDecRunBtn();
-  });
-
-  refreshDecodeSource();
+function sendToDecode() {
+  if (!lastContainer) return;
+  $('dec-srcLast').checked = true;
+  refreshDecSource();
+  const col = document.querySelector('.ih-col[data-col="decode"]');
+  col.classList.remove('is-flash');
+  void col.offsetWidth;
+  col.classList.add('is-flash');
+  col.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function refreshDecodeSource() {
+// ===========================================================================
+// DECODE
+// ===========================================================================
+function initDecode() {
+  const opts = [
+    { id: 'none', label: 'none (raw decode)' },
+    ...ATTACKS.filter(a => a.id !== 'identity'),
+  ];
+  $('dec-attack').innerHTML = opts.map(o =>
+    `<option value="${o.id}">${o.label}</option>`).join('');
+
+  $('dec-file').addEventListener('change', e => loadDecFile(e.target.files?.[0]));
+  const drop = $('dec-drop');
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('is-dragover'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('is-dragover'));
+  drop.addEventListener('drop', e => {
+    e.preventDefault(); drop.classList.remove('is-dragover');
+    loadDecFile(e.dataTransfer.files?.[0]);
+  });
+
+  document.querySelectorAll('input[name="ih-dec-source"]').forEach(r => {
+    r.addEventListener('change', refreshDecSource);
+  });
+  $('dec-runBtn').addEventListener('click', runDecode);
+  refreshDecSource();
+}
+
+function refreshDecSource() {
   const lastOk = !!lastContainer;
   $('dec-srcLast').disabled = !lastOk;
-  $('dec-lastHint').textContent = lastOk
-    ? `${lastContainer.width}×${lastContainer.height}, just encoded`
-    : 'none yet — encode one first';
-  // Sync segmented .is-active classes from input state.
-  document.querySelectorAll('input[name="ih-dec-source"]').forEach(r => {
-    const opt = r.closest('.ih-segmented__opt');
-    if (opt) opt.classList.toggle('is-active', r.checked);
-  });
+  const hint = $('dec-lastHint');
+  if (hint) {
+    hint.textContent = lastOk
+      ? `— ${lastContainer.width}×${lastContainer.height}`
+      : '— none yet, encode one first';
+  }
   if (lastOk && !document.querySelector('input[name="ih-dec-source"]:checked')) {
     $('dec-srcLast').checked = true;
   }
-  if (!lastOk && !dec.upload) {
+  if (!lastOk && !document.querySelector('input[name="ih-dec-source"]:checked')) {
     $('dec-srcUpload').checked = true;
   }
-  // Refresh active highlighting one more time.
-  document.querySelectorAll('input[name="ih-dec-source"]').forEach(r => {
-    const opt = r.closest('.ih-segmented__opt');
-    if (opt) opt.classList.toggle('is-active', r.checked);
-  });
-  $('dec-drop').classList.toggle('is-hidden',
-    document.querySelector('input[name="ih-dec-source"]:checked')?.value !== 'upload');
-  refreshDecRunBtn();
+  if (!lastOk && $('dec-srcLast').checked) $('dec-srcUpload').checked = true;
+  const src = document.querySelector('input[name="ih-dec-source"]:checked')?.value;
+  $('dec-drop').classList.toggle('is-hidden', src !== 'upload');
+  refreshDecRun();
 }
 
 async function loadDecFile(file) {
   if (!file) return;
-  setRunStatus('dec', `Loading ${file.name}…`);
+  setStatus('dec', `Loading ${file.name}…`);
   try {
     const bitmap = await createImageBitmap(file);
     const { imageData, origW, origH } = bitmapToFitted(bitmap);
     dec.upload = imageData;
     $('dec-srcUpload').checked = true;
-    refreshDecodeSource();
-    const downNote = (origW !== imageData.width || origH !== imageData.height)
-      ? ` (downsampled from ${origW}×${origH})` : '';
-    setRunStatus('dec', `Loaded ${imageData.width}×${imageData.height}${downNote}.`);
+    refreshDecSource();
+    const note = (origW !== imageData.width)
+      ? ` (from ${origW}×${origH})` : '';
+    setStatus('dec', `Loaded ${imageData.width}×${imageData.height}${note}.`);
   } catch (e) {
-    setRunStatus('dec', `Failed to load: ${e.message}`, true);
+    setStatus('dec', `Failed to load: ${e.message}`, true);
   }
 }
 
-function refreshDecRunBtn() {
+function refreshDecRun() {
   if (modelStatus !== 'ready' || dec.busy) {
     $('dec-runBtn').disabled = true; return;
   }
@@ -458,7 +414,7 @@ function refreshDecRunBtn() {
 
 async function runDecode() {
   if (dec.busy) return;
-  dec.busy = true; refreshDecRunBtn();
+  dec.busy = true; refreshDecRun();
 
   try {
     const src = document.querySelector('input[name="ih-dec-source"]:checked').value;
@@ -468,22 +424,23 @@ async function runDecode() {
     const crop = computeCrop(original.height, original.width);
     const { core } = splitTrim(original, crop);
 
+    const attackId = $('dec-attack').value;
     let attacked = core;
     let attackLabel = 'none';
-    if (dec.attackId !== 'none') {
-      const a = ATTACKS.find(x => x.id === dec.attackId);
-      if (!a) throw new Error(`unknown attack: ${dec.attackId}`);
+    if (attackId !== 'none') {
+      const a = ATTACKS.find(x => x.id === attackId);
+      if (!a) throw new Error(`unknown attack: ${attackId}`);
       attackLabel = a.label;
-      setRunStatus('dec', `Applying ${attackLabel}…`);
+      setStatus('dec', `Applying ${attackLabel}…`);
       attacked = await a.fn(core);
     }
 
     drawToCanvas($('dec-preview'), attacked);
-    $('dec-previewLabel').textContent = dec.attackId === 'none'
+    $('dec-previewLabel').textContent = attackId === 'none'
       ? 'decoded image (no attack)'
-      : `decoded image (after ${attackLabel})`;
+      : `decoded image after ${attackLabel}`;
 
-    setRunStatus('dec', `Decoding ${attacked.width}×${attacked.height}…`);
+    setStatus('dec', `Decoding ${attacked.width}×${attacked.height}…`);
     const { bits: recBits, ms } = await decode(attacked);
     releaseSession();
 
@@ -508,30 +465,24 @@ async function runDecode() {
     sigEl.textContent = sigOk ? '✓' : '✗';
     sigEl.classList.toggle('is-ok', sigOk);
     sigEl.classList.toggle('is-bad', !sigOk);
-    $('d-ms').textContent = `${ms.toFixed(0)} ms`;
-    $('d-atk').textContent = attackLabel;
+    $('d-ms').textContent = `${ms.toFixed(0)} ms`;
 
     $('dec-output').textContent =
-      `image: ${original.width}×${original.height} → decoded region ${attacked.width}×${attacked.height}\n` +
-      `attack: ${attackLabel}\n` +
-      `\n` +
-      `recovered:\n` +
+      `image:    ${original.width}×${original.height} → decoded region ${attacked.width}×${attacked.height}\n` +
+      `attack:   ${attackLabel}\n\n` +
+      `recovered\n` +
       `  H   : ${hex(recH)}\n` +
       `  sig : ${hex(recSig)}\n` +
-      `  pk  : ${hex(recPk)}\n` +
-      `\n` +
-      `bit accuracy vs known payload: ${acc != null ? acc.toFixed(4) : '— (no reference)'}\n` +
-      `signature verifies under recovered pk: ${sigOk ? 'yes' : 'no'}\n` +
-      `\n` +
+      `  pk  : ${hex(recPk)}\n\n` +
+      `bit accuracy vs known: ${acc != null ? acc.toFixed(4) : '— (no reference)'}\n` +
+      `signature verifies   : ${sigOk ? 'yes' : 'no'}\n\n` +
       `bits: ${Array.from(recBits).join('')}`;
 
     $('dec-results').classList.remove('is-hidden');
-    $('dec-results').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-    setRunStatus('dec', `Done · ${ms.toFixed(0)} ms.`);
+    setStatus('dec', `Done · ${ms.toFixed(0)} ms.`);
   } catch (e) {
-    setRunStatus('dec', `Decode failed: ${e.message}`, true);
+    setStatus('dec', `Decode failed: ${e.message}`, true);
   } finally {
-    dec.busy = false; refreshDecRunBtn();
+    dec.busy = false; refreshDecRun();
   }
 }
