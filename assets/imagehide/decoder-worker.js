@@ -42,9 +42,12 @@ const ORT_BUNDLE = `${ORT_BASE}ort.webgpu.min.mjs`;
 // visible in the worker logs too, helping diagnose stale-cache cases.
 const _DIAG_TAG = '[v2]';
 function diag(msg) {
-  const tagged = `${_DIAG_TAG} ${msg}`;
-  try { console.log('[imagehide-worker]', tagged); } catch (_) {}
-  try { self.postMessage({ id: 0, type: 'diag', message: tagged }); } catch (_) {}
+  // Single channel: postMessage to main thread, which logs once. We
+  // deliberately do NOT also console.log here — Safari shows worker
+  // console output as a separate file context, which doubled every line
+  // in the user-facing console. postMessage is reliable enough that the
+  // worker-side log was redundant.
+  try { self.postMessage({ id: 0, type: 'diag', message: `${_DIAG_TAG} ${msg}` }); } catch (_) {}
 }
 
 function isIOS() {
