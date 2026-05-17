@@ -5,7 +5,15 @@ import { ATTACKS } from './attacks.js';
 import { loadModels, encode, decode, getBackend } from './pipeline.js';
 
 const LIBSODIUM_CDN = 'https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/+esm';
-const MAX_INPUT_PIXELS = 2 * 1024 * 1024;          // ~2 MP — auto-downsample above this
+const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+// Auto-downsample input above this. Mobile is much tighter because WASM-only
+// inference is single-threaded and decode time scales ~linearly with pixels.
+const MAX_INPUT_PIXELS = IS_MOBILE ? 0.5 * 1024 * 1024 : 2 * 1024 * 1024;
+// Attacks pre-checked on first load. Mobile defaults to a smaller representative
+// set so the first run completes in tens of seconds, not minutes.
+const DEFAULT_CHECKED = IS_MOBILE
+  ? new Set(['identity', 'jpeg_q80', 'jpeg_q40', 'chain_insta', 'chain_wechat'])
+  : null;   // null = check everything
 
 const els = {};
 let sodium = null;
@@ -49,8 +57,9 @@ function init() {
 }
 
 function renderAttackList() {
+  const isChecked = a => !DEFAULT_CHECKED || DEFAULT_CHECKED.has(a.id);
   els.attackList.innerHTML = ATTACKS.map(a =>
-    `<label><input type="checkbox" value="${a.id}" checked> ${a.label}</label>`
+    `<label><input type="checkbox" value="${a.id}"${isChecked(a) ? ' checked' : ''}> ${a.label}</label>`
   ).join('');
   els.resultsBody.innerHTML = ATTACKS.map(a =>
     `<tr id="row-${a.id}" class="queued">
