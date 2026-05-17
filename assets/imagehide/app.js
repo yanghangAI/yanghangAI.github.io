@@ -5,7 +5,7 @@ import { ATTACKS } from './attacks.js';
 import { loadModels, encode, decode, getBackend } from './pipeline.js';
 
 const LIBSODIUM_CDN = 'https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/+esm';
-const MAX_PIXELS_BEFORE_WARN = 3 * 1024 * 1024;   // ~3 MP — mobile-safe threshold
+const MAX_INPUT_PIXELS = 2 * 1024 * 1024;          // ~2 MP — auto-downsample above this
 
 const els = {};
 let sodium = null;
@@ -64,16 +64,35 @@ function setStatus(html, isError = false) {
   els.status.classList.toggle('warn', isError);
 }
 
+function bitmapToFittedImageData(bitmap) {
+  // Downsample (preserve aspect ratio, no crop) so total pixels <= MAX_INPUT_PIXELS.
+  // Returns { imageData, origW, origH }.
+  const origW = bitmap.width, origH = bitmap.height;
+  let w = origW, h = origH;
+  const pixels = w * h;
+  if (pixels > MAX_INPUT_PIXELS) {
+    const s = Math.sqrt(MAX_INPUT_PIXELS / pixels);
+    w = Math.max(64, Math.round(w * s));
+    h = Math.max(64, Math.round(h * s));
+  }
+  const c = new OffscreenCanvas(w, h);
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'medium';
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  const imageData = ctx.getImageData(0, 0, w, h);
+  c.width = 0; c.height = 0;
+  bitmap.close();
+  return { imageData, origW, origH };
+}
+
 async function onFile(file) {
   if (!file) return;
   setStatus(`Loading ${file.name}…`);
   try {
     const bitmap = await createImageBitmap(file);
-    const c = new OffscreenCanvas(bitmap.width, bitmap.height);
-    const ctx = c.getContext('2d');
-    ctx.drawImage(bitmap, 0, 0);
-    const imgData = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
-    onImageLoaded(imgData);
+    const { imageData, origW, origH } = bitmapToFittedImageData(bitmap);
+    onImageLoaded(imageData, origW, origH);
   } catch (e) {
     setStatus(`Failed to load: ${e.message}`, true);
   }
@@ -85,33 +104,22 @@ async function loadSample() {
     const resp = await fetch('/assets/imagehide/sample-cover.jpg');
     const blob = await resp.blob();
     const bitmap = await createImageBitmap(blob);
-    const c = new OffscreenCanvas(bitmap.width, bitmap.height);
-    c.getContext('2d').drawImage(bitmap, 0, 0);
-    const imgData = c.getContext('2d').getImageData(0, 0, bitmap.width, bitmap.height);
-    onImageLoaded(imgData);
+    const { imageData, origW, origH } = bitmapToFittedImageData(bitmap);
+    onImageLoaded(imageData, origW, origH);
   } catch (e) {
     setStatus(`Failed to load sample: ${e.message}`, true);
   }
 }
 
-function onImageLoaded(imageData) {
+function onImageLoaded(imageData, origW, origH) {
   state.originalImage = imageData;
   const W = imageData.width, H = imageData.height;
   state.crop = computeCrop(H, W);
-  const pixels = W * H;
-  state.sizeOk = pixels <= MAX_PIXELS_BEFORE_WARN;
   drawToCanvas(els.cover, imageData);
-  setStatus(`Loaded ${W}×${H}. Encoding ${state.crop.cropW}×${state.crop.cropH} (multiple of 64).${
-    state.sizeOk ? '' : ` <span class="warn">Image is ${(pixels / 1e6).toFixed(1)} MP — likely to crash mobile browsers (Safari tab caps around ~300 MB). Use desktop for full-resolution input, or <button id="ih-override">try anyway</button>.</span>`
-  }`);
-  if (!state.sizeOk) {
-    document.getElementById('ih-override').addEventListener('click', () => {
-      state.sizeOk = true;
-      setStatus(`Continuing with ${(pixels / 1e6).toFixed(1)} MP.`);
-      ensureLoaded();
-    });
-    return;
-  }
+  const downsampleNote = (origW && origH && (W !== origW || H !== origH))
+    ? ` (downsampled from ${origW}×${origH} — ${(origW * origH / 1e6).toFixed(1)} MP — to fit browser memory; aspect preserved, no crop)`
+    : '';
+  setStatus(`Loaded ${W}×${H}${downsampleNote}. Encoding ${state.crop.cropW}×${state.crop.cropH} (multiple of 64).`);
   ensureLoaded();
 }
 
