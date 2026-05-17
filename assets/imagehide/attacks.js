@@ -95,8 +95,8 @@ export const ATTACKS = [
   { id: 'jpeg_chain_60_40',    label: 'JPEG 60 → 40',        fn: (img) => jpegChain(img, 60, 40) },
   { id: 'resize_075',          label: 'Resize ↓0.75↑',       fn: (img) => resize(img, 0.75) },
   { id: 'resize_050',          label: 'Resize ↓0.5↑',        fn: (img) => resize(img, 0.5) },
-  { id: 'chain_insta',         label: 'chain_insta',         fn: (img) => chain(img, 0.5, 85) },
-  { id: 'chain_x',             label: 'chain_x',             fn: (img) => chain(img, 0.4, 75) },
-  { id: 'chain_whatsapp_std',  label: 'chain_whatsapp_std',  fn: (img) => chain(img, 0.5, 70) },
-  { id: 'chain_wechat',        label: 'chain_wechat',        fn: (img) => chain(img, 0.3, 50) },
+  { id: 'chain_insta',         label: 'Instagram (↓0.5↑ + JPEG q=85)',     fn: (img) => chain(img, 0.5, 85) },
+  { id: 'chain_x',             label: 'X / Twitter (↓0.4↑ + JPEG q=75)',   fn: (img) => chain(img, 0.4, 75) },
+  { id: 'chain_whatsapp_std',  label: 'WhatsApp (↓0.5↑ + JPEG q=70)',      fn: (img) => chain(img, 0.5, 70) },
+  { id: 'chain_wechat',        label: 'WeChat (↓0.3↑ + JPEG q=50)',        fn: (img) => chain(img, 0.3, 50) },
 ];
