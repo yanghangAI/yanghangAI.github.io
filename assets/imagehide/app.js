@@ -78,11 +78,34 @@ async function loadModel() {
 }
 
 // ---------- helpers ----------
+let _baseStatus = '';
+let _baseStatusCls = '';
 function setGlobalBar(text, cls = '') {
-  const el = document.getElementById('ih-globalbar');
-  document.getElementById('ih-globalbar-text').textContent = text;
-  el.className = 'ih-globalbar' + (cls ? ' ' + cls : '');
+  _baseStatus = text;
+  _baseStatusCls = cls;
+  renderGlobalBar();
 }
+
+// Live JS heap readout. Chrome exposes performance.memory; Safari and Firefox
+// do not (returns undefined), so we show "heap n/a" on those. WASM heap (worker
+// side) is NOT visible from main thread — but main-thread JS heap movement
+// still tracks ImageData and Canvas memory pressure which is the bulk of the
+// non-WASM cost.
+function fmtMB(bytes) { return `${(bytes / 1048576).toFixed(0)} MB`; }
+function heapSuffix() {
+  const m = performance.memory;
+  if (!m) return ' · heap n/a (Safari)';
+  return ` · heap ${fmtMB(m.usedJSHeapSize)} / ${fmtMB(m.jsHeapSizeLimit)}`;
+}
+function renderGlobalBar() {
+  const el = document.getElementById('ih-globalbar');
+  const txt = document.getElementById('ih-globalbar-text');
+  if (!el || !txt) return;
+  txt.textContent = _baseStatus + heapSuffix();
+  el.className = 'ih-globalbar' + (_baseStatusCls ? ' ' + _baseStatusCls : '');
+}
+// Refresh the heap reading periodically. The interval is cheap.
+setInterval(renderGlobalBar, 1500);
 
 function setStatus(which, html, isWarn = false) {
   const el = $(`${which}-status`);
