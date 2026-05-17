@@ -269,26 +269,36 @@ function chunkBitsHTML(bits, known) {
   return lines.join('\n');
 }
 
-function parseCustomBits(text) {
-  const t = text.trim().replace(/\s+/g, '');
-  if (!t) throw new Error('paste some bits first');
-  if (/^[01]+$/.test(t)) {
-    if (t.length !== N_BITS) throw new Error(`expected ${N_BITS} 0/1 chars, got ${t.length}`);
-    const bits = new Uint8Array(N_BITS);
-    for (let i = 0; i < N_BITS; i++) bits[i] = t.charCodeAt(i) - 48;
-    return bits;
+// 96 bytes = (sig + pk) slots — the H slot still holds the real pHash so the
+// Slepian-Wolf BCH/RS pipeline keeps working unchanged. Text is UTF-8; the
+// remaining bytes are zero-padded.
+const CUSTOM_TEXT_BYTES = (N_SIG + N_PK) / 8;  // 96
+
+function parseCustomText(text) {
+  const buf = new TextEncoder().encode(text);
+  if (buf.length > CUSTOM_TEXT_BYTES) {
+    throw new Error(`message is ${buf.length} bytes, max is ${CUSTOM_TEXT_BYTES} (UTF-8)`);
   }
-  if (/^[0-9a-fA-F]+$/.test(t)) {
-    const need = N_BITS / 4;
-    if (t.length !== need) throw new Error(`expected ${need} hex chars, got ${t.length}`);
-    const bits = new Uint8Array(N_BITS);
-    for (let i = 0; i < t.length / 2; i++) {
-      const b = parseInt(t.slice(i*2, i*2+2), 16);
-      for (let j = 0; j < 8; j++) bits[i*8 + j] = (b >> (7 - j)) & 1;
-    }
-    return bits;
-  }
-  throw new Error(`paste ${N_BITS} 0/1 chars or ${N_BITS/4} hex chars`);
+  const out = new Uint8Array(CUSTOM_TEXT_BYTES);
+  out.set(buf, 0);
+  return out;
+}
+
+// Decode a 96-byte block as UTF-8, stripping trailing NUL padding. Invalid
+// UTF-8 sequences (e.g. random sig bytes in auto mode) are replaced with
+// U+FFFD so the line is always renderable.
+function bytesToCustomText(bytes96) {
+  let end = bytes96.length;
+  while (end > 0 && bytes96[end - 1] === 0) end--;
+  return new TextDecoder('utf-8', { fatal: false }).decode(bytes96.subarray(0, end));
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 // ===========================================================================
@@ -312,9 +322,19 @@ function initEncode() {
   document.querySelectorAll('input[name="ih-bits-source"]').forEach(r => {
     r.addEventListener('change', () => {
       const val = document.querySelector('input[name="ih-bits-source"]:checked').value;
-      $('enc-customBits').classList.toggle('is-hidden', val !== 'custom');
+      $('enc-customWrap').classList.toggle('is-hidden', val !== 'custom');
     });
   });
+
+  const ta = $('enc-customBits');
+  const cc = $('enc-charcount');
+  const updateCharCount = () => {
+    const bytes = new TextEncoder().encode(ta.value).length;
+    cc.textContent = `${bytes} / ${CUSTOM_TEXT_BYTES} bytes`;
+    cc.classList.toggle('is-over', bytes > CUSTOM_TEXT_BYTES);
+  };
+  ta.addEventListener('input', updateCharCount);
+  updateCharCount();
 }
 
 async function loadEncFile(file) {
@@ -390,10 +410,12 @@ async function runEncode() {
       sig = sodium.crypto_sign_detached(H, demoKeypair.privateKey);
       pk = demoKeypair.publicKey;
     } else {
-      const userBytes = bitsToBytes(parseCustomBits($('enc-customBits').value));
-      H   = canonicalizeH(userBytes.slice(0, N_H / 8));
-      sig = userBytes.slice(N_H / 8, (N_H + N_SIG) / 8);
-      pk  = userBytes.slice((N_H + N_SIG) / 8);
+      // Custom-text mode: H stays as the real pHash (so BCH/Slepian-Wolf still
+      // works), the user's UTF-8 message is packed into the sig+pk slots.
+      H = canonicalizeH(phash128(core));
+      const textBytes = parseCustomText($('enc-customBits').value);
+      sig = textBytes.slice(0, N_SIG / 8);
+      pk  = textBytes.slice(N_SIG / 8);
     }
     const parts = { H, sig, pk };
 
@@ -431,10 +453,14 @@ async function runEncode() {
       for (let i = 0; i < BCH_T; i++) g.push(Array.from(syndrome.slice(i * 7, (i + 1) * 7)).join(''));
       return g.join(' ');
     })();
+    const msgLine = source === 'custom'
+      ? `message  : "${bytesToCustomText(new Uint8Array([...parts.sig, ...parts.pk]))}"  (${CUSTOM_TEXT_BYTES} bytes, packed into sig+pk slots)\n`
+      : '';
     $('oneshot').textContent =
       `image:    ${enc.origW}×${enc.origH} → encoded region ${enc.crop.cropW}×${enc.crop.cropH}\n` +
       `payload:  ${source}  (Slepian-Wolf: ${BCH_SYNDROME_BITS}b BCH(t=${BCH_T}) syndrome + ${N_SIG}b sig + ${N_PK}b pk = ${PAYLOAD_BITS} wire → RS corrects ${T_BYTES} byte errors → ${MODEL_BITS}b codeword)\n` +
       `\n` +
+      msgLine +
       `H        : ${hex(parts.H)}  (128 bits, recomputable from image)\n` +
       `BCH syn  : ${synStr}  (49 bits, embedded in place of H)\n` +
       `sig      : ${hex(parts.sig)}\n` +
@@ -748,11 +774,13 @@ async function runDecode() {
       for (let i = 0; i < BCH_T; i++) g.push(Array.from(recSyndrome.slice(i * 7, (i + 1) * 7)).join(''));
       return g.join(' ');
     })();
+    const recText = bytesToCustomText(new Uint8Array([...recSig, ...recPk]));
     $('dec-output').innerHTML =
       `image:    ${original.width}×${original.height} → decoded region ${attacked.width}×${attacked.height}\n` +
       `attack:   ${attackLabel}\n` +
       `${accLine}\n` +
       `\n` +
+      `message  : "${escapeHtml(recText)}"  (sig+pk slots read as UTF-8; gibberish in auto mode)\n` +
       `H local  : ${hex(H_local)}  (pHash of attacked image, before BCH correction)\n` +
       `H recov  : ${hex(recH)}  (after BCH correction of ${bchErrors >= 0 ? bchErrors : '?'} bit drift)\n` +
       `BCH syn  : ${recSynStr}  (49 bits, recovered from codeword)\n` +

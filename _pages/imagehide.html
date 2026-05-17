@@ -48,13 +48,17 @@ lede: "Embed 896 invisible bits into any image, then recover them after a JPEG r
           </label>
           <label class="ih-radio">
             <input type="radio" name="ih-bits-source" value="custom">
-            <span><strong>Custom</strong> — paste 896 bits, or 224 hex chars</span>
+            <span><strong>Custom</strong> — type a message (up to 96 chars)</span>
           </label>
         </div>
-        <textarea id="ih-enc-customBits"
-                  class="ih-textarea is-hidden"
-                  rows="2"
-                  placeholder="0101… (896 chars)   or   a1b2c3… (224 hex chars)"></textarea>
+        <div class="ih-customwrap is-hidden" id="ih-enc-customWrap">
+          <textarea id="ih-enc-customBits"
+                    class="ih-textarea"
+                    rows="2"
+                    maxlength="384"
+                    placeholder="Your secret message…"></textarea>
+          <div class="ih-charcount" id="ih-enc-charcount">0 / 96 bytes</div>
+        </div>
       </div>
 
       <div class="ih-runline">

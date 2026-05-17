@@ -220,6 +220,17 @@
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
+.ih-customwrap { margin-top: 0.5rem; }
+.ih-customwrap .ih-textarea { margin-top: 0; }
+.ih-charcount {
+  font-size: 0.72rem;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  color: var(--ink-soft, #666);
+  text-align: right;
+  margin-top: 0.25rem;
+  letter-spacing: 0.02em;
+}
+.ih-charcount.is-over { color: #c1372b; }
 
 /* === select === */
 .ih-select {
