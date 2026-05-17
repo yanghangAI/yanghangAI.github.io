@@ -36,7 +36,14 @@ let state = {
   sizeOk: false,
 };
 
-document.addEventListener('DOMContentLoaded', init);
+// The dynamic imports above are top-level await, so by the time this line
+// runs DOMContentLoaded has typically already fired. Call init() now if the
+// DOM is ready, otherwise wait for it.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
 
 function init() {
   ['upload', 'file', 'sample', 'status', 'cover', 'container', 'residual',
