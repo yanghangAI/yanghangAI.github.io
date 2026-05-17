@@ -18,26 +18,25 @@ let decoderSession = null;
 let activeBackend = null;
 let loadPromise = null;
 
-// Pick the bundle based on device class. The WebGPU bundle initializes WebGPU
-// on import — on iOS Safari that init itself can OOM and leave no backend at
-// all. The plain bundle is WASM (+ WebGL) only and is memory-predictable on
-// mobile; desktop pays a small speed cost but the demo stays reliable.
+// Use the WebGPU bundle everywhere. It contains both WebGPU and WASM providers,
+// so when WebGPU init fails we fall back transparently. The previous "use the
+// plain bundle on mobile" path was a workaround for an iOS Safari issue at
+// larger input sizes; with the demo now capping mobile input to 0.5 MP, WebGPU
+// init usually succeeds on iOS 17.4+ and is far faster than WASM.
 const ORT_VERSION = '1.20.0';
 const ORT_BASE = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
-
-function isMobile() {
-  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-}
-
-const ORT_BUNDLE = isMobile() ? `${ORT_BASE}ort.min.mjs` : `${ORT_BASE}ort.webgpu.min.mjs`;
+const ORT_BUNDLE = `${ORT_BASE}ort.webgpu.min.mjs`;
 
 async function detectWebGPU() {
-  if (isMobile()) return false;
   if (!('gpu' in navigator)) return false;
   try {
     const adapter = await navigator.gpu.requestAdapter();
     return !!adapter;
   } catch { return false; }
+}
+
+async function createSession(buf, providers) {
+  return ort.InferenceSession.create(buf, { executionProviders: providers });
 }
 
 export function getBackend() { return activeBackend; }
@@ -46,19 +45,31 @@ export async function loadModels(encoderUrl, decoderUrl, onProgress) {
   if (loadPromise) return loadPromise;
   loadPromise = (async () => {
     if (!ort) ort = await import(/* @vite-ignore */ ORT_BUNDLE);
-    // Point WASM at the CDN so it finds its .wasm files.
     if (ort.env && ort.env.wasm) ort.env.wasm.wasmPaths = ORT_BASE;
-    activeBackend = (await detectWebGPU()) ? 'webgpu' : 'wasm';
-    // Fetch both .onnx files with a shared progress callback.
     const [encBuf, decBuf] = await Promise.all([
       fetchWithProgress(encoderUrl, onProgress, 'encoder'),
       fetchWithProgress(decoderUrl, onProgress, 'decoder'),
     ]);
-    // Tell ORT to use the chosen backend first, then fall back to wasm.
-    const providers = activeBackend === 'webgpu' ? ['webgpu', 'wasm'] : ['wasm'];
-    const sessionOpts = { executionProviders: providers };
-    encoderSession = await ort.InferenceSession.create(encBuf, sessionOpts);
-    decoderSession = await ort.InferenceSession.create(decBuf, sessionOpts);
+    // Try WebGPU first. If session creation throws (iOS Safari has been seen to
+    // OOM at WebGPU init), fall back to WASM transparently.
+    if (await detectWebGPU()) {
+      try {
+        encoderSession = await createSession(encBuf, ['webgpu', 'wasm']);
+        decoderSession = await createSession(decBuf, ['webgpu', 'wasm']);
+        activeBackend = 'webgpu';
+        return;
+      } catch (e) {
+        console.warn('WebGPU session create failed, falling back to WASM:', e);
+        // Sessions may be partially initialized — release before retrying.
+        try { encoderSession?.release?.(); } catch (_) {}
+        try { decoderSession?.release?.(); } catch (_) {}
+        encoderSession = null;
+        decoderSession = null;
+      }
+    }
+    encoderSession = await createSession(encBuf, ['wasm']);
+    decoderSession = await createSession(decBuf, ['wasm']);
+    activeBackend = 'wasm';
   })();
   return loadPromise;
 }
