@@ -646,7 +646,10 @@ async function runDecode() {
 
     setStatus('dec', `Decoding ${attacked.width}×${attacked.height}…`);
     const { bits: recCodeword, ms } = await decode(attacked);   // 1024 bits
-    releaseSession();
+    // Note: we deliberately do NOT releaseSession() here. The decoder worker
+    // stays alive across multiple attacks so iOS Safari doesn't overlap two
+    // WASM heaps during the ~100ms-1s page-reclaim window. ensureMode() will
+    // tear it down cleanly if the user switches back to encoding.
 
     // Stage 1 — RS(128, 100) decode → 796 wire bits, fixing up to 14 byte errors.
     const eccRes = eccDecode(recCodeword);
