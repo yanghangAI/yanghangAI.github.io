@@ -255,10 +255,18 @@ async function runEncode() {
   const cropMsg = (state.crop.trimmedTop || state.crop.trimmedLeft)
     ? ` (${state.crop.trimmedTop + state.crop.trimmedBottom} px trimmed vertically, ${state.crop.trimmedLeft + state.crop.trimmedRight} px horizontally)`
     : '';
+  const hex = (u8) => Array.from(u8, b => b.toString(16).padStart(2, '0')).join('');
+  const bitstr = Array.from(bits).join('');
   els.oneshot.textContent =
     `Image: ${state.origW} × ${state.origH} → encoded region ${state.crop.cropW} × ${state.crop.cropH}${cropMsg}\n` +
     `Payload: 896 bits (128 H | 512 sig | 256 pk)\n` +
-    `Encode: ${state.encodeMs.toFixed(1)} ms · Decode: ${state.decodeMs.toFixed(1)} ms`;
+    `Encode: ${state.encodeMs.toFixed(1)} ms · Decode: ${state.decodeMs.toFixed(1)} ms\n` +
+    `\n` +
+    `H   (128b): ${hex(H_bytes)}\n` +
+    `sig (512b): ${hex(sig)}\n` +
+    `pk  (256b): ${hex(pk)}\n` +
+    `\n` +
+    `bits (MSB-first, 896): ${bitstr}`;
 }
 
 function drawResidual(canvas, coverCore, containerCore, scale) {
