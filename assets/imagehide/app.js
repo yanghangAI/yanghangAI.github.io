@@ -14,6 +14,11 @@ const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 // intermediates peak at ~60-120 MB per megapixel, and even 1 MP can OOM
 // Safari/iOS tabs; safer to be uniform than to surprise desktop Safari users.
 const MAX_INPUT_PIXELS = 0.5 * 1024 * 1024;
+// Minimum shorter-dimension after fit. The ONNX models were traced at H=W=256
+// to bake the canonical pHash-adapter permutation; smaller inputs throw a
+// ScatterElements out-of-range error at inference. We upscale anything below
+// this threshold to keep the demo working on small thumbnails.
+const MIN_SHORT_DIM = 256;
 
 const $ = (id) => document.getElementById(`ih-${id}`);
 
@@ -119,10 +124,23 @@ function setStatus(which, html, isWarn = false) {
 function bitmapToFitted(bitmap) {
   const origW = bitmap.width, origH = bitmap.height;
   let w = origW, h = origH;
+  // Downscale if over the megapixel budget.
   if (w * h > MAX_INPUT_PIXELS) {
     const s = Math.sqrt(MAX_INPUT_PIXELS / (w * h));
     w = Math.max(64, Math.round(w * s));
     h = Math.max(64, Math.round(h * s));
+  }
+  // Upscale if the shorter side is below the ONNX 256-trace minimum. After
+  // splitTrim rounds down to a multiple of 64 we need >=256 on each side, so
+  // make the shorter dimension at least MIN_SHORT_DIM while preserving aspect.
+  // We deliberately allow the resulting pixel count to exceed MAX_INPUT_PIXELS
+  // here — for extreme aspect ratios (e.g. 100x2000) clamping again would
+  // shrink the shorter dim back below 256 and fail at inference.
+  const short = Math.min(w, h);
+  if (short < MIN_SHORT_DIM) {
+    const s = MIN_SHORT_DIM / short;
+    w = Math.round(w * s);
+    h = Math.round(h * s);
   }
   const c = new OffscreenCanvas(w, h);
   const ctx = c.getContext('2d');
@@ -310,6 +328,11 @@ async function runEncode() {
 
   try {
     const source = document.querySelector('input[name="ih-bits-source"]:checked').value;
+    if (enc.crop.cropW < 256 || enc.crop.cropH < 256) {
+      throw new Error(
+        `encoded region ${enc.crop.cropW}x${enc.crop.cropH} is below the ` +
+        `256x256 minimum baked into the ONNX trace`);
+    }
     const { core, strips } = splitTrim(enc.cover, enc.crop);
 
     let bits, parts;
@@ -516,6 +539,11 @@ async function runDecode() {
     if (!original) throw new Error('no image selected');
 
     const crop = computeCrop(original.height, original.width);
+    if (crop.cropW < 256 || crop.cropH < 256) {
+      throw new Error(
+        `decode region ${crop.cropW}x${crop.cropH} is below the 256x256 ` +
+        `minimum baked into the ONNX trace`);
+    }
     const { core } = splitTrim(original, crop);
 
     const attackId = $('dec-attack').value;
