@@ -2,10 +2,15 @@
  * Worker-backed inference pipeline.
  *
  * All ONNX inference runs in a Web Worker so we can `worker.terminate()`
- * between attack batches and reclaim WASM linear memory — the only browser
- * mechanism that actually shrinks WASM heap (it doesn't have a free/shrink
- * API). The model bytes are cached in main-thread memory so re-spawning the
- * worker is just session-create, not a network fetch.
+ * to reclaim WASM linear memory — the only browser mechanism that actually
+ * shrinks WASM heap (it doesn't have a free/shrink API). The model bytes are
+ * cached in main-thread memory so re-spawning the worker is just session-
+ * create, not a network fetch.
+ *
+ * Memory strategy: the worker hosts ONE session at a time — either the
+ * encoder OR the decoder. Switching modes terminates the worker and re-spawns
+ * it with only the needed model loaded. This roughly halves resident WASM
+ * footprint vs. loading both sessions into the same worker.
  *
  * Public API:
  *   getBackend()                  → 'wasm' | 'webgpu'
@@ -16,7 +21,7 @@
  */
 
 let worker = null;
-let workerReady = false;
+let workerMode = null;        // null | 'encoder' | 'decoder'
 let encoderBuf = null;
 let decoderBuf = null;
 let activeBackend = 'wasm';   // worker uses WASM; reported to UI for honesty
@@ -68,22 +73,27 @@ export async function loadModels(encoderUrl, decoderUrl, onProgress) {
     encoderBuf = encBuf;
     decoderBuf = decBuf;
   }
-  await initWorker();
+  // No worker spawn here — encode()/decode() lazily start a single-mode worker.
 }
 
-async function initWorker() {
-  if (workerReady) return;
+async function ensureMode(mode) {
+  if (workerMode === mode && worker) return;
+  // Switching modes (or first use): tear down any existing worker so the
+  // WASM heap of the prior session is fully released before we load the next.
+  if (worker) {
+    worker.terminate();
+    worker = null;
+  }
+  workerMode = null;
   ensureWorker();
-  // Send clones (slice copies the buffer) and transfer the clones so the
-  // worker takes ownership; we keep the originals for the next batch.
-  const encClone = encoderBuf.slice(0);
-  const decClone = decoderBuf.slice(0);
+  const buf = mode === 'encoder' ? encoderBuf : decoderBuf;
+  const clone = buf.slice(0);
   const reply = await send(
-    { type: 'init', encoderBuf: encClone, decoderBuf: decClone },
-    [encClone, decClone],
+    { type: 'init', mode, modelBuf: clone },
+    [clone],
   );
   if (reply.backend) activeBackend = reply.backend;
-  workerReady = true;
+  workerMode = mode;
 }
 
 async function fetchWithProgress(url, cb, tag) {
@@ -107,7 +117,7 @@ async function fetchWithProgress(url, cb, tag) {
 }
 
 export async function encode(coverImageData, bitsUint8) {
-  if (!workerReady) await initWorker();
+  await ensureMode('encoder');
   const W = coverImageData.width, H = coverImageData.height;
   // We must transfer; the caller can no longer use these buffers. We slice to
   // copy so the caller's ImageData stays usable.
@@ -129,7 +139,7 @@ export async function encode(coverImageData, bitsUint8) {
 }
 
 export async function decode(containerImageData) {
-  if (!workerReady) await initWorker();
+  await ensureMode('decoder');
   const W = containerImageData.width, H = containerImageData.height;
   const imageBuf = containerImageData.data.buffer.slice(0);
   const r = await send(
@@ -149,8 +159,7 @@ export function releaseSession() {
     worker.terminate();
     worker = null;
   }
-  workerReady = false;
-  // Reject any pending operations
+  workerMode = null;
   for (const p of pending.values()) p.reject(new Error('session released'));
   pending.clear();
 }

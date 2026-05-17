@@ -22,8 +22,8 @@
  */
 
 let ort = null;
-let encoderSession = null;
-let decoderSession = null;
+let session = null;          // single active session — either encoder or decoder
+let sessionMode = null;      // 'encoder' | 'decoder'
 let activeBackend = 'wasm';
 
 const ORT_VERSION = '1.20.0';
@@ -95,48 +95,41 @@ function float32CHWtoImageBuf(arr, W, H) {
 
 async function handle(msg) {
   if (msg.type === 'init') {
-    ort = await import(ORT_BUNDLE);
-    if (ort.env && ort.env.wasm) ort.env.wasm.wasmPaths = ORT_BASE;
-    // Try WebGPU first, fall back to WASM. Worker termination cleans up both,
-    // so the per-decode memory accumulation that previously killed the tab is
-    // no longer a constraint here.
+    if (!ort) {
+      ort = await import(ORT_BUNDLE);
+      if (ort.env && ort.env.wasm) ort.env.wasm.wasmPaths = ORT_BASE;
+    }
+    const { mode, modelBuf } = msg;
+    const bytes = new Uint8Array(modelBuf);
     const tryWebGPU = await detectWebGPU();
-    const encBytes = new Uint8Array(msg.encoderBuf);
-    const decBytes = new Uint8Array(msg.decoderBuf);
     if (tryWebGPU) {
       try {
-        // 10s timeout — if WebGPU session create stalls (Safari has been seen
-        // to hang here), fall back to WASM rather than hanging the page.
-        encoderSession = await withTimeout(
-          ort.InferenceSession.create(encBytes, { executionProviders: ['webgpu', 'wasm'] }),
-          10000, 'encoder webgpu init');
-        decoderSession = await withTimeout(
-          ort.InferenceSession.create(decBytes, { executionProviders: ['webgpu', 'wasm'] }),
-          10000, 'decoder webgpu init');
+        session = await withTimeout(
+          ort.InferenceSession.create(bytes, { executionProviders: ['webgpu', 'wasm'] }),
+          10000, `${mode} webgpu init`);
+        sessionMode = mode;
         activeBackend = 'webgpu';
         return { type: 'ready', backend: activeBackend, transfer: [] };
       } catch (e) {
-        // WebGPU session create failed or timed out — wipe partial state, fall through to WASM.
-        try { encoderSession?.release?.(); } catch (_) {}
-        try { decoderSession?.release?.(); } catch (_) {}
-        encoderSession = null;
-        decoderSession = null;
+        try { session?.release?.(); } catch (_) {}
+        session = null;
       }
     }
-    encoderSession = await ort.InferenceSession.create(encBytes, { executionProviders: ['wasm'] });
-    decoderSession = await ort.InferenceSession.create(decBytes, { executionProviders: ['wasm'] });
+    session = await ort.InferenceSession.create(bytes, { executionProviders: ['wasm'] });
+    sessionMode = mode;
     activeBackend = 'wasm';
     return { type: 'ready', backend: activeBackend, transfer: [] };
   }
 
   if (msg.type === 'encode') {
+    if (sessionMode !== 'encoder') throw new Error('worker not in encoder mode');
     const { imageBuf, W, H, bitsBuf } = msg;
     const imgArr  = imageBufToFloat32CHW(imageBuf, W, H);
     const bitsArr = new Float32Array(bitsBuf);
     const imgT  = new ort.Tensor('float32', imgArr,  [1, 3, H, W]);
     const bitsT = new ort.Tensor('float32', bitsArr, [1, bitsArr.length]);
     const t0 = performance.now();
-    const { container_rgb } = await encoderSession.run({ host_rgb: imgT, bits: bitsT });
+    const { container_rgb } = await session.run({ host_rgb: imgT, bits: bitsT });
     const ms = performance.now() - t0;
     const outBuf = float32CHWtoImageBuf(container_rgb.data, W, H);
     disposeTensor(imgT); disposeTensor(bitsT); disposeTensor(container_rgb);
@@ -144,11 +137,12 @@ async function handle(msg) {
   }
 
   if (msg.type === 'decode') {
+    if (sessionMode !== 'decoder') throw new Error('worker not in decoder mode');
     const { imageBuf, W, H } = msg;
     const arr = imageBufToFloat32CHW(imageBuf, W, H);
     const t = new ort.Tensor('float32', arr, [1, 3, H, W]);
     const t0 = performance.now();
-    const { bit_logits } = await decoderSession.run({ container_rgb: t });
+    const { bit_logits } = await session.run({ container_rgb: t });
     const ms = performance.now() - t0;
     const src = bit_logits.data;
     const bits = new Uint8Array(src.length);

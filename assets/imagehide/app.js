@@ -260,9 +260,13 @@ async function runEncode() {
   state.originalImage = null;
   state.coreCover = null;
 
-  // Single decode time-probe on the clean container.
-  const dec = await decode(container);
-  state.decodeMs = dec.ms;
+  // Tear down the encoder worker before we touch the decoder. Two-stage
+  // pipeline: encoder is fully gone (WASM heap returned to OS) before the
+  // decoder worker is spawned in runAttacks. The decode time will be picked
+  // up from the first attack instead of a dedicated probe (the probe would
+  // have spun up the decoder while encoder state was still draining).
+  releaseSession();
+  state.decodeMs = null;
 
   const cropMsg = (state.crop.trimmedTop || state.crop.trimmedLeft)
     ? ` (${state.crop.trimmedTop + state.crop.trimmedBottom} px trimmed vertically, ${state.crop.trimmedLeft + state.crop.trimmedRight} px horizontally)`
@@ -274,7 +278,7 @@ async function runEncode() {
     `Image: ${state.origW} × ${state.origH} → encoded region ${state.crop.cropW} × ${state.crop.cropH}${cropMsg}\n` +
     `Payload: 896 bits (128 H | 512 sig | 256 pk)\n` +
     `Container vs cover: PSNR ${psnrStr} · SSIM ${state.encodeSsim.toFixed(4)}\n` +
-    `Encode: ${state.encodeMs.toFixed(1)} ms · Decode: ${state.decodeMs.toFixed(1)} ms\n` +
+    `Encode: ${state.encodeMs.toFixed(1)} ms (decode ≈ same — same INN run in reverse)\n` +
     `\n` +
     `H   (128b): ${hex(H_bytes)}\n` +
     `sig (512b): ${hex(sig)}\n` +
