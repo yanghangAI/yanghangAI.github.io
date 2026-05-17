@@ -80,7 +80,12 @@ export async function loadModels(encoderUrl, decoderUrl, onProgress) {
     encoderBuf = encBuf;
     decoderBuf = decBuf;
   }
-  // No worker spawn here — encode()/decode() lazily start a single-mode worker.
+  // Eagerly spawn an encoder-mode worker so the WebGPU/WASM negotiation
+  // happens NOW, before the user clicks anything. Otherwise `getBackend()`
+  // just reports the default 'wasm' until the first encode/decode, and the
+  // status bar lies about what's actually going to run. The encoder worker
+  // also doubles as warm-up — the first real encode skips session init.
+  await ensureMode('encoder');
 }
 
 async function ensureMode(mode) {
