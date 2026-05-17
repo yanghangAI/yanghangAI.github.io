@@ -237,5 +237,18 @@ lede: "Embed 896 invisible bits into any image, then recover them after a JPEG r
 <script type="module">
   const v = '{{ site.time | date: "%s" }}';
   window.__imagehideVersion = v;
-  await import(`{{ '/assets/imagehide/app.js' | relative_url }}?v=${v}`);
+  try {
+    await import(`{{ '/assets/imagehide/app.js' | relative_url }}?v=${v}`);
+  } catch (err) {
+    // Surface load-time failures so the page doesn't just sit stuck on
+    // "loading model…" with no clue what broke.
+    console.error('imagehide bootstrap failed:', err);
+    const bar = document.getElementById('ih-globalbar-text');
+    if (bar) {
+      bar.textContent = `bootstrap failed: ${err && err.message ? err.message : err}`;
+      bar.style.color = '#b00020';
+    }
+    document.body.insertAdjacentHTML('beforeend',
+      `<pre style="position:fixed;left:0;right:0;bottom:0;background:#fee;color:#a00;padding:1rem;margin:0;border-top:2px solid #a00;font:0.8rem ui-monospace,monospace;white-space:pre-wrap;z-index:9999">imagehide bootstrap failed:\n${err && err.stack ? err.stack : err}</pre>`);
+  }
 </script>
