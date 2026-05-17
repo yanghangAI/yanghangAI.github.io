@@ -63,8 +63,11 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
-  align-items: start;
+  align-items: stretch;
 }
+/* No flex on the column — let content sit at the top; align-items: stretch on
+   the grid makes both cards the same height by extending the shorter one's
+   background, which is what the user actually wants. */
 @media (max-width: 880px) {
   .ih-grid { grid-template-columns: 1fr; gap: 1.8rem; }
 }
