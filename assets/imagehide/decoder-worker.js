@@ -36,22 +36,29 @@ const ORT_BASE = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/di
 // WebGPU bundle includes the WASM provider as fallback.
 const ORT_BUNDLE = `${ORT_BASE}ort.webgpu.min.mjs`;
 
-function isSafari() {
-  // Safari (and all iOS browsers, which use WebKit) — UA contains "Safari" but
-  // not "Chrome" or "CriOS" or "FxiOS". WebKit doesn't reliably support
-  // WebGPU in DedicatedWorkers as of 2026: the API may be present but
-  // requestAdapter / InferenceSession can hang. Skip WebGPU on Safari.
+function isIOS() {
+  // iOS Safari + iOS Chrome (which uses WebKit). WebGPU on iOS is still
+  // crashy enough in workers to be net-negative; skip it.
   const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
-  return /Safari/.test(ua) && !/Chrome|Chromium|CriOS|FxiOS|Edg\//.test(ua);
+  return /iPhone|iPad|iPod/i.test(ua);
 }
 
 async function detectWebGPU() {
   if (typeof navigator === 'undefined' || !('gpu' in navigator)) return false;
-  if (isSafari()) return false;
+  if (isIOS()) return false;
   try {
     const adapter = await navigator.gpu.requestAdapter();
-    return !!adapter;
-  } catch { return false; }
+    if (!adapter) {
+      console.log('[imagehide-worker] WebGPU: requestAdapter returned null');
+      return false;
+    }
+    console.log('[imagehide-worker] WebGPU adapter:',
+                adapter.info?.vendor, adapter.info?.architecture, adapter.info?.device);
+    return true;
+  } catch (e) {
+    console.log('[imagehide-worker] WebGPU detect failed:', e.message);
+    return false;
+  }
 }
 
 function withTimeout(promise, ms, label) {
@@ -98,17 +105,21 @@ async function handle(msg) {
     const tryWebGPU = await detectWebGPU();
     if (tryWebGPU) {
       try {
+        const t0 = performance.now();
         session = await withTimeout(
           ort.InferenceSession.create(bytes, { executionProviders: ['webgpu', 'wasm'] }),
           10000, `${mode} webgpu init`);
+        console.log(`[imagehide-worker] WebGPU session ready for ${mode} in ${(performance.now()-t0).toFixed(0)}ms`);
         sessionMode = mode;
         activeBackend = 'webgpu';
         return { type: 'ready', backend: activeBackend, transfer: [] };
       } catch (e) {
+        console.log(`[imagehide-worker] WebGPU session create failed for ${mode}: ${e.message}`);
         try { session?.release?.(); } catch (_) {}
         session = null;
       }
     }
+    console.log(`[imagehide-worker] Using WASM backend for ${mode}`);
     session = await ort.InferenceSession.create(bytes, { executionProviders: ['wasm'] });
     sessionMode = mode;
     activeBackend = 'wasm';
