@@ -8,12 +8,24 @@
  *   jpegChain(q1, q2)   two JPEG passes, q1 first then q2
  *   resize(scale)       bilinear down to scale×scale, then up to original
  *   chain(scale, q)     platform pipeline: resize then JPEG
+ *
+ * Memory note: every OffscreenCanvas allocated below is freed by setting its
+ * width/height to 0 after use, and every ImageBitmap is .close()'d. iOS Safari
+ * holds GPU memory for these and the JS GC alone doesn't reliably release it
+ * between attack rows — the explicit cleanup is what keeps the tab alive.
  */
+
+function freeCanvas(c) {
+  if (c) { c.width = 0; c.height = 0; }
+}
 
 async function imageDataToBlob(img, type, quality) {
   const c = new OffscreenCanvas(img.width, img.height);
-  c.getContext('2d').putImageData(new ImageData(img.data, img.width, img.height), 0, 0);
-  return c.convertToBlob({ type, quality });
+  c.getContext('2d').putImageData(
+    new ImageData(img.data, img.width, img.height), 0, 0);
+  const blob = await c.convertToBlob({ type, quality });
+  freeCanvas(c);
+  return blob;
 }
 
 async function blobToImageData(blob) {
@@ -21,7 +33,10 @@ async function blobToImageData(blob) {
   const c = new OffscreenCanvas(bitmap.width, bitmap.height);
   const ctx = c.getContext('2d');
   ctx.drawImage(bitmap, 0, 0);
-  return ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+  const out = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+  bitmap.close();
+  freeCanvas(c);
+  return out;
 }
 
 export async function identity(img) {
@@ -42,20 +57,28 @@ export async function resize(img, scale) {
   const W = img.width, H = img.height;
   const sw = Math.max(1, Math.round(W * scale));
   const sh = Math.max(1, Math.round(H * scale));
+
+  const srcCanvas = new OffscreenCanvas(W, H);
+  srcCanvas.getContext('2d').putImageData(
+    new ImageData(img.data, W, H), 0, 0);
+
   const small = new OffscreenCanvas(sw, sh);
   const sctx = small.getContext('2d');
   sctx.imageSmoothingEnabled = true;
   sctx.imageSmoothingQuality = 'medium';   // 'medium' approximates bilinear
-  const srcCanvas = new OffscreenCanvas(W, H);
-  srcCanvas.getContext('2d').putImageData(
-    new ImageData(img.data, W, H), 0, 0);
   sctx.drawImage(srcCanvas, 0, 0, sw, sh);
+  freeCanvas(srcCanvas);
+
   const big = new OffscreenCanvas(W, H);
   const bctx = big.getContext('2d');
   bctx.imageSmoothingEnabled = true;
   bctx.imageSmoothingQuality = 'medium';
   bctx.drawImage(small, 0, 0, W, H);
-  return bctx.getImageData(0, 0, W, H);
+  freeCanvas(small);
+
+  const out = bctx.getImageData(0, 0, W, H);
+  freeCanvas(big);
+  return out;
 }
 
 export async function chain(img, scale, q) {
