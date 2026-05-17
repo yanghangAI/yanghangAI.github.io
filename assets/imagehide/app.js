@@ -819,13 +819,17 @@ async function runDecode() {
       return g.join(' ');
     })();
     const recText = bytesToCustomText(recTextBytes);
+    const msgEl = $('dec-message');
+    const detailsEl = $('dec-details');
     if (isCustomMode) {
-      $('dec-output').innerHTML =
-        `image:    ${original.width}×${original.height} → decoded region ${attacked.width}×${attacked.height}\n` +
-        `attack:   ${attackLabel}\n` +
-        `\n` +
-        `message  : "${escapeHtml(recText)}"`;
+      msgEl.innerHTML =
+        `<span class="ih-message__label">recovered message</span>` +
+        `<span class="ih-message__text">${escapeHtml(recText)}</span>`;
+      msgEl.classList.remove('is-hidden');
+      detailsEl.classList.add('is-hidden');
     } else {
+      msgEl.classList.add('is-hidden');
+      detailsEl.classList.remove('is-hidden');
       $('dec-output').innerHTML =
         `image:    ${original.width}×${original.height} → decoded region ${attacked.width}×${attacked.height}\n` +
         `attack:   ${attackLabel}\n` +

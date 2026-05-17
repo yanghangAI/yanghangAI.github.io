@@ -423,6 +423,28 @@
 }
 
 /* === details / collapsible bit dump === */
+.ih-message {
+  margin-top: 0.8rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--rule-strong);
+  background: var(--paper-soft, #fafaf7);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.ih-message__label {
+  display: block;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft, #888);
+  margin-bottom: 0.35rem;
+  font-family: inherit;
+}
+.ih-message__text { color: var(--ink); }
+
 .ih-details {
   margin-top: 0.6rem;
   font-size: 0.88rem;
