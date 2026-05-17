@@ -1,12 +1,54 @@
 // Versioned dynamic imports so a redeploy busts cached siblings.
 const V = (typeof window !== 'undefined' && window.__imagehideVersion) || 'dev';
 const { computeCrop, splitTrim, pasteBack } = await import(`./trim.js?v=${V}`);
-const { phash128, packPayload, unpackPayload, bitAccuracy, bitsToBytes,
-        N_H, N_SIG, N_BITS } = await import(`./payload.js?v=${V}`);
+const { phash128, packPayload, unpackPayload, bitAccuracy, bitsToBytes, bytesToBits,
+        N_H, N_SIG, N_PK, N_BITS } = await import(`./payload.js?v=${V}`);
 const { psnr, ssim } = await import(`./metrics.js?v=${V}`);
 const { ATTACKS } = await import(`./attacks.js?v=${V}`);
 const { loadModels, encode, decode, getBackend, releaseSession } =
   await import(`./pipeline.js?v=${V}`);
+// Outer ECC: RS(128, 103) over GF(2^8). 817 wire bits -> 1024-bit codeword
+// (what the model sees), corrects up to 12 byte errors of channel damage.
+const { eccEncode, eccDecode, T_BYTES, PAYLOAD_BITS, CODEWORD_BITS } =
+  await import(`./ecc.js?v=${V}`);
+// Slepian-Wolf pHash compression: BCH(127, 78, t=7). We transmit a 49-bit
+// syndrome of H instead of the full 128 bits; the receiver recomputes pHash
+// on the attacked image and uses the syndrome to recover H exactly, fixing
+// up to 7 bits of pHash drift.
+const { bchEncodeSyndrome, bchDecode, BCH_SYNDROME_BITS, BCH_T } =
+  await import(`./bch.js?v=${V}`);
+
+const MODEL_BITS = CODEWORD_BITS;     // 1024
+
+// Wire payload layout (817 bits, exactly PAYLOAD_BITS):
+//   [0   .. 49 )  BCH syndrome of pHash
+//   [49  .. 561)  Ed25519 signature (512 bits)
+//   [561 ..817 )  Ed25519 public key (256 bits)
+const OFF_SYN = 0;
+const OFF_SIG = OFF_SYN + BCH_SYNDROME_BITS;             // 49
+const OFF_PK  = OFF_SIG + N_SIG;                         // 561
+
+function packWirePayload(syndromeBits, sigBytes, pkBytes) {
+  const out = new Uint8Array(PAYLOAD_BITS);
+  out.set(syndromeBits, OFF_SYN);
+  out.set(bytesToBits(sigBytes), OFF_SIG);
+  out.set(bytesToBits(pkBytes),  OFF_PK);
+  return out;
+}
+function unpackWirePayload(bits817) {
+  return {
+    syndrome: bits817.slice(OFF_SYN, OFF_SIG),
+    sig:      bitsToBytes(bits817.slice(OFF_SIG, OFF_PK)),
+    pk:       bitsToBytes(bits817.slice(OFF_PK,  OFF_PK + N_PK)),
+  };
+}
+// pHash is 128 bits but BCH(127) carries 127. Drop the LSB of the last byte
+// (force bit 127 = 0) so encoder and decoder agree on a canonical 16-byte H.
+function canonicalizeH(H16) {
+  const out = Uint8Array.from(H16);
+  out[15] &= 0xFE;
+  return out;
+}
 
 const LIBSODIUM_CDN = 'https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/+esm';
 const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -26,7 +68,11 @@ let sodium = null, demoKeypair = null;
 let modelStatus = 'idle';
 
 let lastContainer = null;
-let lastPayloadBits = null;
+let lastPayloadBits = null;     // 817-bit wire payload (syndrome|sig|pk)
+let lastCodewordBits = null;    // 1024-bit RS codeword
+let lastH = null;                // canonical 16-byte H (LSB of last byte cleared)
+let lastSyndrome = null;         // 49-bit BCH syndrome
+let lastLogicalParts = null;     // { H, sig, pk } for display + bit-acc
 
 const enc = { cover: null, origW: 0, origH: 0, crop: null, busy: false };
 const dec = { upload: null, busy: false };
@@ -335,24 +381,28 @@ async function runEncode() {
     }
     const { core, strips } = splitTrim(enc.cover, enc.crop);
 
-    let bits, parts;
+    let H, sig, pk;
     if (source === 'auto') {
-      const H_bytes = phash128(core);
-      const sig = sodium.crypto_sign_detached(H_bytes, demoKeypair.privateKey);
-      const pk = demoKeypair.publicKey;
-      bits = packPayload(H_bytes, sig, pk);
-      parts = { H: H_bytes, sig, pk };
+      H = canonicalizeH(phash128(core));
+      sig = sodium.crypto_sign_detached(H, demoKeypair.privateKey);
+      pk = demoKeypair.publicKey;
     } else {
-      bits = parseCustomBits($('enc-customBits').value);
-      const bytes = bitsToBytes(bits);
-      parts = {
-        H:   bytes.slice(0, N_H / 8),
-        sig: bytes.slice(N_H / 8, (N_H + N_SIG) / 8),
-        pk:  bytes.slice((N_H + N_SIG) / 8),
-      };
+      const userBytes = bitsToBytes(parseCustomBits($('enc-customBits').value));
+      H   = canonicalizeH(userBytes.slice(0, N_H / 8));
+      sig = userBytes.slice(N_H / 8, (N_H + N_SIG) / 8);
+      pk  = userBytes.slice((N_H + N_SIG) / 8);
     }
+    const parts = { H, sig, pk };
 
-    const { container, ms } = await encode(core, bits);
+    // Slepian-Wolf: transmit only the BCH syndrome of H (49 bits) instead of
+    // H itself (128 bits). Then wrap (syndrome | sig | pk) = 817 wire bits
+    // in the RS(128, 103) codeword the model sees.
+    const H_bits128 = bytesToBits(H);
+    const syndrome = bchEncodeSyndrome(H_bits128.slice(0, 127));
+    const wireBits = packWirePayload(syndrome, sig, pk);
+    const codeword = eccEncode(wireBits);
+
+    const { container, ms } = await encode(core, codeword);
     const psnrV = psnr(container, core);
     const ssimV = ssim(container, core);
 
@@ -360,26 +410,34 @@ async function runEncode() {
                                     enc.cover.width, enc.cover.height);
 
     lastContainer = fullContainer;
-    lastPayloadBits = bits;
+    lastPayloadBits = wireBits;
+    lastCodewordBits = codeword;
+    lastH = H;
+    lastSyndrome = syndrome;
+    lastLogicalParts = parts;
 
     drawToCanvas($('container'), fullContainer);
     drawResidual($('residual'), core, container, 10);
 
     $('m-psnr').textContent = isFinite(psnrV) ? psnrV.toFixed(1) : '∞';
     $('m-ssim').textContent = ssimV.toFixed(4);
-    $('m-ms').textContent = `${ms.toFixed(0)} ms`;
+    $('m-ms').textContent = `${ms.toFixed(0)} ms`;
 
-    // Format matches the decode card line-for-line so the two codeblocks line up
-    // when the user opens both <details>.
+    const synStr = (() => {
+      const g = [];
+      for (let i = 0; i < 7; i++) g.push(Array.from(syndrome.slice(i * 7, (i + 1) * 7)).join(''));
+      return g.join(' ');
+    })();
     $('oneshot').textContent =
-      `image:   ${enc.origW}×${enc.origH} → encoded region ${enc.crop.cropW}×${enc.crop.cropH}\n` +
-      `payload: ${source} (${N_BITS} bits)\n` +
+      `image:    ${enc.origW}×${enc.origH} → encoded region ${enc.crop.cropW}×${enc.crop.cropH}\n` +
+      `payload:  ${source}  (Slepian-Wolf: 49b BCH syndrome + 512b sig + 256b pk = 817 wire → RS(128,103) → ${MODEL_BITS}b codeword)\n` +
       `\n` +
-      `H   : ${hex(parts.H)}\n` +
-      `sig : ${hex(parts.sig)}\n` +
-      `pk  : ${hex(parts.pk)}\n` +
+      `H        : ${hex(parts.H)}  (128 bits, recomputable from image)\n` +
+      `BCH syn  : ${synStr}  (49 bits, embedded in place of H)\n` +
+      `sig      : ${hex(parts.sig)}\n` +
+      `pk       : ${hex(parts.pk)}\n` +
       `\n` +
-      `bits:\n${chunkBits(bits)}`;
+      `codeword (${MODEL_BITS} bits embedded):\n${chunkBits(codeword)}`;
 
     $('enc-results').classList.remove('is-hidden');
 
@@ -558,16 +616,50 @@ async function runDecode() {
     }
 
     setStatus('dec', `Decoding ${attacked.width}×${attacked.height}…`);
-    const { bits: recBits, ms } = await decode(attacked);
+    const { bits: recCodeword, ms } = await decode(attacked);   // 1024 bits
     releaseSession();
 
-    const { H: recH, sig: recSig, pk: recPk } = unpackPayload(recBits);
-    let sigOk = false;
-    try { sigOk = sodium.crypto_sign_verify_detached(recSig, recH, recPk); }
-    catch (_) { sigOk = false; }
+    // Stage 1 — RS(128, 103) decode → 817 wire bits, fixing up to 12 byte errors.
+    const eccRes = eccDecode(recCodeword);
+    const recWire = eccRes.bits;
+    const eccErrors = eccRes.errors;
+    const eccOk = eccRes.ok;
 
-    const knownBits = (src === 'last') ? lastPayloadBits : null;
-    const acc = knownBits ? bitAccuracy(recBits, knownBits) : null;
+    const { syndrome: recSyndrome, sig: recSig, pk: recPk } = unpackWirePayload(recWire);
+
+    // Stage 2 — Slepian-Wolf: recompute pHash on the attacked image and use
+    // BCH(127, 78, t=7) with the received syndrome to recover H exactly,
+    // correcting up to 7 bits of pHash drift.
+    const H_local = canonicalizeH(phash128(attacked));
+    const vGuess = bytesToBits(H_local).slice(0, 127);
+    const bch = bchDecode(recSyndrome, vGuess);
+    const bchErrors = bch.errors;
+    const bchOk = bch.ok;
+
+    // Reconstruct 16-byte H from the 127-bit corrected vector (bit 127 = 0).
+    const recHBits = new Uint8Array(128);
+    recHBits.set(bch.bits, 0);
+    const recH = bitsToBytes(recHBits);
+
+    let sigOk = false;
+    if (bchOk) {
+      try { sigOk = sodium.crypto_sign_verify_detached(recSig, recH, recPk); }
+      catch (_) { sigOk = false; }
+    }
+
+    // Three bit-accuracy levels:
+    //   acc         — 896-bit "logical" payload (H | sig | pk) after BCH + RS
+    //   wireAcc     — 817-bit wire (syndrome | sig | pk) after RS
+    //   codewordAcc — 1024-bit raw channel
+    const knownWire     = (src === 'last') ? lastPayloadBits  : null;
+    const knownCodeword = (src === 'last') ? lastCodewordBits : null;
+    const knownLogical  = (src === 'last' && lastLogicalParts)
+      ? packPayload(lastLogicalParts.H, lastLogicalParts.sig, lastLogicalParts.pk)
+      : null;
+    const recLogical = packPayload(recH, recSig, recPk);
+    const acc         = knownLogical  ? bitAccuracy(recLogical, knownLogical) : null;
+    const wireAcc     = knownWire     ? bitAccuracy(recWire, knownWire)       : null;
+    const codewordAcc = knownCodeword ? bitAccuracy(recCodeword, knownCodeword) : null;
 
     const accEl = $('d-acc');
     if (acc != null) {
@@ -582,25 +674,56 @@ async function runDecode() {
     sigEl.textContent = sigOk ? '✓' : '✗';
     sigEl.classList.toggle('is-ok', sigOk);
     sigEl.classList.toggle('is-bad', !sigOk);
-    $('d-ms').textContent = `${ms.toFixed(0)} ms`;
 
-    // Same line structure as the encode card so the two codeblocks align;
-    // the bits use innerHTML to wrap mismatches in <span class="b-bad"> when
-    // a reference payload is known.
+    const eccEl = $('d-ecc');
+    if (eccEl) {
+      if (eccOk) {
+        eccEl.textContent = eccErrors === 0 ? 'clean' : `${eccErrors} / ${T_BYTES}`;
+        eccEl.classList.toggle('is-ok', true);
+        eccEl.classList.toggle('is-bad', false);
+      } else {
+        eccEl.textContent = 'fail';
+        eccEl.classList.toggle('is-ok', false);
+        eccEl.classList.toggle('is-bad', true);
+      }
+    }
+    const bchEl = $('d-bch');
+    if (bchEl) {
+      if (bchOk) {
+        bchEl.textContent = bchErrors === 0 ? 'clean' : `${bchErrors} / ${BCH_T}`;
+        bchEl.classList.toggle('is-ok', true);
+        bchEl.classList.toggle('is-bad', false);
+      } else {
+        bchEl.textContent = 'drift>7';
+        bchEl.classList.toggle('is-ok', false);
+        bchEl.classList.toggle('is-bad', true);
+      }
+    }
+    $('d-ms').textContent = `${ms.toFixed(0)} ms`;
+
+    const eccTag = eccOk ? (eccErrors === 0 ? 'clean' : `${eccErrors}/${T_BYTES} fixed`) : 'uncorrectable';
+    const bchTag = bchOk ? (bchErrors === 0 ? 'clean' : `${bchErrors}/${BCH_T} fixed`)   : 'drift>7';
     const accLine = acc != null
-      ? `bit acc: ${acc.toFixed(4)}  ·  sig: ${sigOk ? 'yes' : 'no'}`
-      : `bit acc: — (no reference)  ·  sig: ${sigOk ? 'yes' : 'no'}`;
-    const bitsHtml = chunkBitsHTML(recBits, knownBits);
+      ? `logical (H|sig|pk, 896b) acc: ${acc.toFixed(4)}  ·  wire (817b) acc: ${wireAcc.toFixed(4)}  ·  codeword (1024b) acc: ${codewordAcc.toFixed(4)}\nsig: ${sigOk ? 'yes' : 'no'}  ·  RS ecc: ${eccTag}  ·  BCH pHash: ${bchTag}`
+      : `acc: — (no reference)  ·  sig: ${sigOk ? 'yes' : 'no'}  ·  RS ecc: ${eccTag}  ·  BCH pHash: ${bchTag}`;
+    const bitsHtml = chunkBitsHTML(recCodeword, knownCodeword);
+    const recSynStr = (() => {
+      const g = [];
+      for (let i = 0; i < 7; i++) g.push(Array.from(recSyndrome.slice(i * 7, (i + 1) * 7)).join(''));
+      return g.join(' ');
+    })();
     $('dec-output').innerHTML =
-      `image:   ${original.width}×${original.height} → decoded region ${attacked.width}×${attacked.height}\n` +
-      `attack:  ${attackLabel}\n` +
+      `image:    ${original.width}×${original.height} → decoded region ${attacked.width}×${attacked.height}\n` +
+      `attack:   ${attackLabel}\n` +
       `${accLine}\n` +
       `\n` +
-      `H   : ${hex(recH)}\n` +
-      `sig : ${hex(recSig)}\n` +
-      `pk  : ${hex(recPk)}\n` +
+      `H local  : ${hex(H_local)}  (pHash of attacked image, before BCH correction)\n` +
+      `H recov  : ${hex(recH)}  (after BCH correction of ${bchErrors >= 0 ? bchErrors : '?'} bit drift)\n` +
+      `BCH syn  : ${recSynStr}  (49 bits, recovered from codeword)\n` +
+      `sig      : ${hex(recSig)}\n` +
+      `pk       : ${hex(recPk)}\n` +
       `\n` +
-      `bits:\n${bitsHtml}`;
+      `codeword (1024 bits, diff vs encoded):\n${bitsHtml}`;
 
     $('dec-results').classList.remove('is-hidden');
     setStatus('dec', `Done · ${ms.toFixed(0)} ms.`);

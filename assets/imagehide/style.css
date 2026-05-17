@@ -328,12 +328,17 @@
 
 /* big stat row */
 .ih-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
+  display: flex;
+  flex-wrap: wrap;
   border: 1px solid var(--rule);
   background: #fff;
   margin-bottom: 0.9rem;
+}
+.ih-stats > .ih-stat {
+  flex: 1 1 0;
+  min-width: 6.5rem;
+  border-top: 1px solid var(--rule);
+  margin-top: -1px;
 }
 .ih-stat {
   padding: 0.7rem 0.85rem 0.65rem;

@@ -156,6 +156,14 @@ lede: "Embed 896 invisible bits into any image, then recover them after a JPEG r
             <div class="ih-stat__lbl">signature</div>
           </div>
           <div class="ih-stat">
+            <div class="ih-stat__val" id="ih-d-ecc">—</div>
+            <div class="ih-stat__lbl">rs ecc <span class="ih-stat__note" title="Reed-Solomon RS(128, 103) over GF(2^8) corrects up to 12 byte errors anywhere in the 1024-bit codeword. 'clean' = no channel errors; 'N / 12' = ECC patched N corrupted bytes; 'fail' = more than 12 byte errors slipped through.">·&nbsp;bytes</span></div>
+          </div>
+          <div class="ih-stat">
+            <div class="ih-stat__val" id="ih-d-bch">—</div>
+            <div class="ih-stat__lbl">phash drift <span class="ih-stat__note" title="Slepian-Wolf BCH(127, 78, t=7) over GF(2^7) corrects up to 7 bits of pHash drift between the encoder's H and the receiver's locally-recomputed pHash on the attacked image. 'clean' = pHash survived intact; 'N / 7' = BCH fixed N bit-flips; 'drift>7' = attack moved pHash too far and signature verification fails.">·&nbsp;bits</span></div>
+          </div>
+          <div class="ih-stat">
             <div class="ih-stat__val" id="ih-d-ms">—</div>
             <div class="ih-stat__lbl">decode time <span class="ih-stat__note" title="Browser WASM is single-threaded with no SIMD model-quantization; a phone NPU runs this same model ~100–500× faster, a server GPU another ~10× on top.">·&nbsp;100–500× in prod</span></div>
           </div>
