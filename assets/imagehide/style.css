@@ -358,12 +358,12 @@
   margin-bottom: 0.8rem;
 }
 .ih-canvases--single { grid-template-columns: 1fr; max-width: 22rem; }
-.ih-canvases--single canvas { max-height: 18rem; width: auto; max-width: 100%; margin: 0 auto; object-fit: contain; }
 .ih-canvases figure { margin: 0; }
 .ih-canvases canvas {
   display: block;
   width: 100%;
-  height: auto;
+  height: 14rem;            /* fixed height for all result previews */
+  object-fit: contain;       /* preserve aspect; letterbox if needed */
   border: 1px solid var(--rule);
   background: #fff;
   image-rendering: pixelated;
