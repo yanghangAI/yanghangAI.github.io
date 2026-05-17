@@ -38,6 +38,13 @@ function ensureWorker() {
   worker = new Worker(WORKER_URL, { type: 'module' });
   worker.addEventListener('message', e => {
     const msg = e.data;
+    // Out-of-band diagnostics from the worker (id=0). Surface them in the
+    // main-thread console with a clear prefix since browsers like Safari
+    // hide worker console output by default.
+    if (msg && msg.type === 'diag') {
+      console.log('[imagehide-worker]', msg.message);
+      return;
+    }
     const p = pending.get(msg.id);
     if (!p) return;
     pending.delete(msg.id);
