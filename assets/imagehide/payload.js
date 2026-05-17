@@ -1,15 +1,22 @@
 /**
  * Payload helpers for the imagehide demo.
  *
- * The 896-bit MWIP payload is [H(128) | sig(512) | pk(256)].
+ * The 896-bit MWIP user-level payload is [H(128) | sig(512) | pk(256)]; the
+ * Slepian-Wolf wire payload that the model embeds replaces H with a 49-bit
+ * BCH syndrome (see bch.js + ecc.js).
  *
  * Bit/byte conventions: MSB-first within each byte (matches Ed25519 and the
  * model's bit-encoding adapter).
  *
- * pHash: 32×32 grayscale → 8×8 DCT (top-left low-frequency block) → mean
- * threshold → 64 bits → repeat-twice padding to 128 bits to match the H slot.
- * Honest placeholder; the production MWIP H function will replace this.
+ * pHash: full PDQ (Facebook ThreatExchange), implemented in pdq.js, truncated
+ * to 128 bits via zigzag over the top-left 16x16 sub-block.
  */
+
+// Top-of-file static import so the browser resolves the dependency before any
+// other code in this module runs. Re-exported so callers that need direct PDQ
+// access don't have to import the module separately.
+import { pdq128 } from './pdq.js';
+export { pdq128 };
 
 export const N_BITS = 896;
 export const N_H = 128;
@@ -97,33 +104,6 @@ function dct2_8x8(block) {
       const cu = u === 0 ? Math.SQRT1_2 : 1;
       const cv = v === 0 ? Math.SQRT1_2 : 1;
       out[u * N + v] = (cu * cv * s) / 4;
-    }
-  }
-  return out;
-}
-
-// Full PDQ — Facebook ThreatExchange's perceptual hash, ported to JS in pdq.js.
-// Empirically dominates every other 128-bit pHash we tested (max attack drift
-// 3/128 vs 12/128 for the prior blurred-hybrid). See drift sweep at
-// /work/pi_nwycoff_umass_edu/hang/drift_pdq.py for the benchmark data.
-import { pdq128 } from './pdq.js';
-
-// 3×3 box blur — kept around in case we ever revert. Currently unused by phash128.
-function boxBlur3x3(src, W, H) {
-  const out = new Float64Array(W * H);
-  for (let y = 0; y < H; y++) {
-    const y0 = y > 0 ? y - 1 : 0;
-    const y1 = y;
-    const y2 = y < H - 1 ? y + 1 : H - 1;
-    for (let x = 0; x < W; x++) {
-      const x0 = x > 0 ? x - 1 : 0;
-      const x1 = x;
-      const x2 = x < W - 1 ? x + 1 : W - 1;
-      out[y * W + x] = (
-          src[y0 * W + x0] + src[y0 * W + x1] + src[y0 * W + x2]
-        + src[y1 * W + x0] + src[y1 * W + x1] + src[y1 * W + x2]
-        + src[y2 * W + x0] + src[y2 * W + x1] + src[y2 * W + x2]
-      ) / 9;
     }
   }
   return out;
