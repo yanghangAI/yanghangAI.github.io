@@ -20,8 +20,17 @@ let loadPromise = null;
 
 const ORT_CDN = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.0/dist/ort.webgpu.min.mjs';
 
+function isMobile() {
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+}
+
 async function detectWebGPU() {
   if (!('gpu' in navigator)) return false;
+  // iOS Safari WebGPU sessions accumulate compute-pipeline memory across
+  // inference calls and kill tabs shortly after a batch completes. WASM is
+  // slower but memory-stable. Same observed pattern on Android Chrome under
+  // ORT-web 1.20 — gate by UA to be safe.
+  if (isMobile()) return false;
   try {
     const adapter = await navigator.gpu.requestAdapter();
     return !!adapter;
