@@ -116,7 +116,7 @@ async function fetchWithProgress(url, cb, tag) {
   return buf.buffer;
 }
 
-export async function encode(coverImageData, bitsUint8) {
+export async function encode(coverImageData, bitsUint8, perm) {
   await ensureMode('encoder');
   const W = coverImageData.width, H = coverImageData.height;
   // We must transfer; the caller can no longer use these buffers. We slice to
@@ -128,9 +128,12 @@ export async function encode(coverImageData, bitsUint8) {
   const bitsFloat = new Float32Array(bitsUint8.length);
   for (let i = 0; i < bitsUint8.length; i++) bitsFloat[i] = bitsUint8[i];
   const bitsBuf = bitsFloat.buffer;
+  // perm: { data: Int32Array, p } — slice to copy then transfer ownership.
+  const permBuf = perm.data.buffer.slice(0);
+  const permP = perm.p;
   const r = await send(
-    { type: 'encode', imageBuf, W, H, bitsBuf },
-    [imageBuf, bitsBuf],
+    { type: 'encode', imageBuf, W, H, bitsBuf, permBuf, permP },
+    [imageBuf, bitsBuf, permBuf],
   );
   // Worker now returns Float32 CHW directly. We keep the float32 buffer for the
   // attack pipeline (sub-uint8 residual survives the resize step) and also
@@ -156,13 +159,15 @@ export async function encode(coverImageData, bitsUint8) {
   };
 }
 
-export async function decode(containerImageData) {
+export async function decode(containerImageData, perm) {
   await ensureMode('decoder');
   const W = containerImageData.width, H = containerImageData.height;
   const imageBuf = containerImageData.data.buffer.slice(0);
+  const permBuf = perm.data.buffer.slice(0);
+  const permP = perm.p;
   const r = await send(
-    { type: 'decode', imageBuf, W, H },
-    [imageBuf],
+    { type: 'decode', imageBuf, W, H, permBuf, permP },
+    [imageBuf, permBuf],
   );
   return { bits: new Uint8Array(r.bitsBuf), ms: r.ms };
 }

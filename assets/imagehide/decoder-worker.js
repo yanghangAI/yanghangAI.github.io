@@ -8,8 +8,13 @@
  *
  * Message protocol (id-correlated):
  *   { id, type: 'init',   encoderBuf, decoderBuf }
- *   { id, type: 'encode', imageBuf, W, H, bitsBuf }
- *   { id, type: 'decode', imageBuf, W, H }
+ *   { id, type: 'encode', imageBuf, W, H, bitsBuf, permBuf, permP }
+ *   { id, type: 'decode', imageBuf, W, H,           permBuf, permP }
+ *
+ * `permBuf` is an Int32Array buffer of length 12*1024*permP, CHW perm stack
+ * computed by the main thread via assets/imagehide/perm.js. The ONNX graph
+ * takes the perm as an input tensor so it's truly size-polymorphic instead
+ * of using baked indices from one trace size.
  *
  * Replies:
  *   { id, type: 'ready'  }
@@ -112,13 +117,20 @@ async function handle(msg) {
 
   if (msg.type === 'encode') {
     if (sessionMode !== 'encoder') throw new Error('worker not in encoder mode');
-    const { imageBuf, W, H, bitsBuf } = msg;
+    const { imageBuf, W, H, bitsBuf, permBuf, permP } = msg;
     const imgArr  = imageBufToFloat32CHW(imageBuf, W, H);
     const bitsArr = new Float32Array(bitsBuf);
+    // perm_stack is Int32 CHW-perm of shape (12, 1024, p) but ONNX expects
+    // int64 indices for ScatterElements. Widen on the fly.
+    const permI32 = new Int32Array(permBuf);
+    const permI64 = new BigInt64Array(permI32.length);
+    for (let i = 0; i < permI32.length; i++) permI64[i] = BigInt(permI32[i]);
     const imgT  = new ort.Tensor('float32', imgArr,  [1, 3, H, W]);
     const bitsT = new ort.Tensor('float32', bitsArr, [1, bitsArr.length]);
+    const permT = new ort.Tensor('int64',   permI64, [12, 1024, permP]);
     const t0 = performance.now();
-    const { container_rgb } = await session.run({ host_rgb: imgT, bits: bitsT });
+    const { container_rgb } = await session.run({
+      host_rgb: imgT, bits: bitsT, perm_stack: permT });
     const ms = performance.now() - t0;
     // Copy the Float32 CHW data out of ORT-owned session memory (clamped to
     // [-1, 1] to remove tiny overshoots), then transfer the buffer to the
@@ -131,17 +143,22 @@ async function handle(msg) {
       const v = src[i];
       f32Out[i] = v < -1 ? -1 : (v > 1 ? 1 : v);
     }
-    disposeTensor(imgT); disposeTensor(bitsT); disposeTensor(container_rgb);
+    disposeTensor(imgT); disposeTensor(bitsT); disposeTensor(permT);
+    disposeTensor(container_rgb);
     return { type: 'encoded', f32Buf: f32Out.buffer, ms, transfer: [f32Out.buffer] };
   }
 
   if (msg.type === 'decode') {
     if (sessionMode !== 'decoder') throw new Error('worker not in decoder mode');
-    const { imageBuf, W, H } = msg;
+    const { imageBuf, W, H, permBuf, permP } = msg;
     const arr = imageBufToFloat32CHW(imageBuf, W, H);
-    const t = new ort.Tensor('float32', arr, [1, 3, H, W]);
+    const permI32 = new Int32Array(permBuf);
+    const permI64 = new BigInt64Array(permI32.length);
+    for (let i = 0; i < permI32.length; i++) permI64[i] = BigInt(permI32[i]);
+    const t     = new ort.Tensor('float32', arr,     [1, 3, H, W]);
+    const permT = new ort.Tensor('int64',   permI64, [12, 1024, permP]);
     const t0 = performance.now();
-    const { bit_logits } = await session.run({ container_rgb: t });
+    const { bit_logits } = await session.run({ container_rgb: t, perm_stack: permT });
     const ms = performance.now() - t0;
     const src = bit_logits.data;
     const bits = new Uint8Array(src.length);
@@ -149,7 +166,7 @@ async function handle(msg) {
       const s = 1 / (1 + Math.exp(-src[i]));
       bits[i] = s > 0.5 ? 1 : 0;
     }
-    disposeTensor(t); disposeTensor(bit_logits);
+    disposeTensor(t); disposeTensor(permT); disposeTensor(bit_logits);
     return { type: 'decoded', bitsBuf: bits.buffer, ms, transfer: [bits.buffer] };
   }
 

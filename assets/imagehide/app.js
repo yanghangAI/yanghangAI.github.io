@@ -6,6 +6,7 @@ const { phash128, packPayload, unpackPayload, bitAccuracy, bitsToBytes, bytesToB
 const { psnr, ssim } = await import(`./metrics.js?v=${V}`);
 const { ATTACKS, imageDataToFrame, frameToImageData } =
   await import(`./attacks.js?v=${V}`);
+const { buildPermStack, dwtDims } = await import(`./perm.js?v=${V}`);
 const { loadModels, encode, decode, getBackend, releaseSession } =
   await import(`./pipeline.js?v=${V}`);
 // Outer ECC: RS(128, 100) over GF(2^8). 796 wire bits -> 1024-bit codeword
@@ -79,6 +80,21 @@ let lastSource = null;           // 'auto' | 'custom' — what payload mode enco
 let lastContainerCoreF32 = null; // Float32Array CHW [-1,1] of the encoded core region
 let lastContainerCoreW = 0;
 let lastContainerCoreH = 0;
+
+// Cache permutations by DWT size so multiple decodes on the same image don't
+// recompute the (slow) MT19937 + argsort over hundreds of thousands of
+// positions. Keyed by `${hDwt}x${wDwt}`.
+const _permCache = new Map();
+function permFor(inputH, inputW) {
+  const { hDwt, wDwt } = dwtDims(inputH, inputW);
+  const key = `${hDwt}x${wDwt}`;
+  let perm = _permCache.get(key);
+  if (!perm) {
+    perm = buildPermStack(hDwt, wDwt);
+    _permCache.set(key, perm);
+  }
+  return perm;
+}
 
 const enc = { cover: null, origW: 0, origH: 0, crop: null, busy: false };
 const dec = { upload: null, busy: false };
@@ -432,7 +448,8 @@ async function runEncode() {
     const wireBits = packWirePayload(syndrome, sig, pk);
     const codeword = eccEncode(wireBits);
 
-    const { container, containerF32, ms } = await encode(core, codeword);
+    const encPerm = permFor(core.height, core.width);
+    const { container, containerF32, ms } = await encode(core, codeword, encPerm);
     const psnrV = psnr(container, core);
     const ssimV = ssim(container, core);
 
@@ -673,7 +690,8 @@ async function runDecode() {
     }
 
     setStatus('dec', `Decoding ${attacked.width}×${attacked.height}…`);
-    const { bits: recCodeword, ms } = await decode(attacked);   // 1024 bits
+    const decPerm = permFor(attacked.height, attacked.width);
+    const { bits: recCodeword, ms } = await decode(attacked, decPerm);   // 1024 bits
     // Note: we deliberately do NOT releaseSession() here. The decoder worker
     // stays alive across multiple attacks so iOS Safari doesn't overlap two
     // WASM heaps during the ~100ms-1s page-reclaim window. ensureMode() will
