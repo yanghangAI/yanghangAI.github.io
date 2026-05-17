@@ -695,29 +695,27 @@ async function runDecode() {
       for (let i = 0; i < 127; i++) if (knownBits[i] !== localBits[i]) truePhashDrift++;
     }
 
+    // Show actual error counts (not the decoder's success/failure flag), colored
+    // by whether the count fits in the layer's correction budget. When ECC/BCH
+    // give up, the actual count is more useful than the binary "fail" — and
+    // BCH can spuriously fail when RS damage corrupted the syndrome input even
+    // though the underlying pHash drift was within budget.
     const eccEl = $('d-ecc');
     if (eccEl) {
-      if (eccOk) {
-        eccEl.textContent = eccErrors === 0 ? 'clean' : `${eccErrors} / ${T_BYTES}`;
-        eccEl.classList.toggle('is-ok', true);
-        eccEl.classList.toggle('is-bad', false);
-      } else {
-        // RS gave up — show the actual byte-error count if we know the reference,
-        // otherwise just "fail" (uploaded image with no known original).
-        eccEl.textContent = trueByteErrors != null ? `${trueByteErrors} / ${T_BYTES} (fail)` : 'fail';
-        eccEl.classList.toggle('is-ok', false);
-        eccEl.classList.toggle('is-bad', true);
-      }
+      const n = trueByteErrors != null ? trueByteErrors : eccErrors;
+      eccEl.textContent = n === 0 ? 'clean' : `${n} / ${T_BYTES}`;
+      eccEl.classList.toggle('is-ok', n >= 0 && n <= T_BYTES);
+      eccEl.classList.toggle('is-bad', n > T_BYTES);
     }
     const bchEl = $('d-bch');
     if (bchEl) {
-      if (bchOk) {
-        bchEl.textContent = bchErrors === 0 ? 'clean' : `${bchErrors} / ${BCH_T}`;
-        bchEl.classList.toggle('is-ok', true);
-        bchEl.classList.toggle('is-bad', false);
+      const n = truePhashDrift != null ? truePhashDrift : (bchOk ? bchErrors : null);
+      if (n != null) {
+        bchEl.textContent = n === 0 ? 'clean' : `${n} / ${BCH_T}`;
+        bchEl.classList.toggle('is-ok', n <= BCH_T);
+        bchEl.classList.toggle('is-bad', n > BCH_T);
       } else {
-        // BCH gave up — show actual pHash drift bits if we know the reference H.
-        bchEl.textContent = truePhashDrift != null ? `${truePhashDrift} / ${BCH_T} (fail)` : 'drift>7';
+        bchEl.textContent = '> 7';
         bchEl.classList.toggle('is-ok', false);
         bchEl.classList.toggle('is-bad', true);
       }
@@ -727,9 +725,19 @@ async function runDecode() {
     const eccTag = eccOk
       ? (eccErrors === 0 ? 'clean' : `${eccErrors}/${T_BYTES} fixed`)
       : (trueByteErrors != null ? `${trueByteErrors} byte errors (need ≤${T_BYTES})` : 'uncorrectable');
-    const bchTag = bchOk
-      ? (bchErrors === 0 ? 'clean' : `${bchErrors}/${BCH_T} fixed`)
-      : (truePhashDrift != null ? `${truePhashDrift} bit drift (need ≤${BCH_T})` : 'drift>7');
+    let bchTag;
+    if (bchOk) {
+      bchTag = bchErrors === 0 ? 'clean' : `${bchErrors}/${BCH_T} fixed`;
+    } else if (truePhashDrift != null && truePhashDrift <= BCH_T) {
+      // Surprising case: pHash drift fits in budget but BCH still failed. This
+      // happens when RS damage corrupted the syndrome — BCH gets garbage input
+      // and can't recover even though the underlying drift was tiny.
+      bchTag = `${truePhashDrift} bit drift (would fit; syndrome corrupted by RS-unrecoverable channel damage)`;
+    } else if (truePhashDrift != null) {
+      bchTag = `${truePhashDrift} bit drift (need ≤${BCH_T})`;
+    } else {
+      bchTag = 'drift>7';
+    }
     const accLine = acc != null
       ? `logical (H|sig|pk, 896b) acc: ${acc.toFixed(4)}  ·  wire (817b) acc: ${wireAcc.toFixed(4)}  ·  codeword (1024b) acc: ${codewordAcc.toFixed(4)}\nsig: ${sigOk ? 'yes' : 'no'}  ·  RS ecc: ${eccTag}  ·  BCH pHash: ${bchTag}`
       : `acc: — (no reference)  ·  sig: ${sigOk ? 'yes' : 'no'}  ·  RS ecc: ${eccTag}  ·  BCH pHash: ${bchTag}`;
