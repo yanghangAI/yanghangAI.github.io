@@ -77,9 +77,11 @@ let lastLogicalParts = null;     // { H, sig, pk } for display + bit-acc
 const enc = { cover: null, origW: 0, origH: 0, crop: null, busy: false };
 const dec = { upload: null, busy: false };
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else { init(); }
+// init() is invoked at the END of this file — see the bottom for the
+// DOMContentLoaded handler. Moved there because invoking init() here triggers
+// loadInfra() -> setGlobalBar() -> assignment to `_baseStatus` (a `let` declared
+// further down), which throws a TDZ ReferenceError silently inside the async
+// loadInfra body, leaving the page stuck on the bootstrap banner.
 
 function init() {
   initEncode();
@@ -733,3 +735,8 @@ async function runDecode() {
     dec.busy = false; refreshDecRun();
   }
 }
+
+// --- bootstrap: kick off init() now that every `let` is initialized ---
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else { init(); }
