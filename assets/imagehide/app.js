@@ -604,23 +604,48 @@ async function runDecode() {
     const { bits: recCodeword, ms } = await decode(attacked);   // 1024 bits
     releaseSession();
 
-    // ECC-decode the recovered codeword back to 896 user bits, fixing channel
-    // errors (up to 8 byte-errors) along the way.
+    // Stage 1 — RS(128, 112) decode → 896 wire bits, fixing up to 8 byte errors.
     const eccRes = eccDecode(recCodeword);
-    const recBits = eccRes.bits;                                // 896 bits
+    const recWire = eccRes.bits;
     const eccErrors = eccRes.errors;
     const eccOk = eccRes.ok;
 
-    const { H: recH, sig: recSig, pk: recPk } = unpackPayload(recBits);
-    let sigOk = false;
-    try { sigOk = sodium.crypto_sign_verify_detached(recSig, recH, recPk); }
-    catch (_) { sigOk = false; }
+    // Unpack the Slepian-Wolf wire payload: syndrome (49b), sig (64B), pk (32B).
+    const { syndrome: recSyndrome, sig: recSig, pk: recPk } = unpackWirePayload(recWire);
 
-    // Bit-accuracy is reported on the user payload (post-ECC). The channel-level
-    // codeword bit-acc is implicit in the ECC-corrected-byte count.
-    const knownBits = (src === 'last') ? lastPayloadBits : null;
+    // Stage 2 — Slepian-Wolf: recompute pHash on the attacked image and use
+    // BCH(127, 78, t=7) with the received syndrome to recover H exactly,
+    // correcting up to 7 bits of pHash drift.
+    const H_local = canonicalizeH(phash128(attacked));
+    const H_local_bits = bytesToBits(H_local);
+    const vGuess = H_local_bits.slice(0, 127);
+    const bch = bchDecode(recSyndrome, vGuess);
+    const bchErrors = bch.errors;
+    const bchOk = bch.ok;
+
+    // Reconstruct the 16-byte H from the 127-bit corrected vector (bit 127 = 0).
+    const recHBits = new Uint8Array(128);
+    recHBits.set(bch.bits, 0);
+    const recH = bitsToBytes(recHBits);
+
+    let sigOk = false;
+    if (bchOk) {
+      try { sigOk = sodium.crypto_sign_verify_detached(recSig, recH, recPk); }
+      catch (_) { sigOk = false; }
+    }
+
+    // Bit-accuracy on three levels:
+    //   acc          — 896-bit logical payload (H | sig | pk), after BCH + RS
+    //   wireAcc      — 896-bit wire payload (syndrome | sig | pk | pad), after RS
+    //   codewordAcc  — 1024-bit raw channel
+    const knownWire     = (src === 'last') ? lastPayloadBits  : null;
     const knownCodeword = (src === 'last') ? lastCodewordBits : null;
-    const acc = knownBits ? bitAccuracy(recBits, knownBits) : null;
+    const knownLogical  = (src === 'last' && lastLogicalParts)
+      ? packPayload(lastLogicalParts.H, lastLogicalParts.sig, lastLogicalParts.pk)
+      : null;
+    const recLogical = packPayload(recH, recSig, recPk);
+    const acc         = knownLogical  ? bitAccuracy(recLogical, knownLogical) : null;
+    const wireAcc     = knownWire     ? bitAccuracy(recWire, knownWire) : null;
     const codewordAcc = knownCodeword ? bitAccuracy(recCodeword, knownCodeword) : null;
 
     const accEl = $('d-acc');
@@ -639,7 +664,7 @@ async function runDecode() {
     const eccEl = $('d-ecc');
     if (eccEl) {
       if (eccOk) {
-        eccEl.textContent = eccErrors === 0 ? 'clean' : `${eccErrors} / 8`;
+        eccEl.textContent = eccErrors === 0 ? 'clean' : `${eccErrors} / ${T_BYTES}`;
         eccEl.classList.toggle('is-ok', true);
         eccEl.classList.toggle('is-bad', false);
       } else {
@@ -648,28 +673,50 @@ async function runDecode() {
         eccEl.classList.toggle('is-bad', true);
       }
     }
+    const bchEl = $('d-bch');
+    if (bchEl) {
+      if (bchOk) {
+        bchEl.textContent = bchErrors === 0 ? 'clean' : `${bchErrors} / ${BCH_T}`;
+        bchEl.classList.toggle('is-ok', true);
+        bchEl.classList.toggle('is-bad', false);
+      } else {
+        bchEl.textContent = 'drift>7';
+        bchEl.classList.toggle('is-ok', false);
+        bchEl.classList.toggle('is-bad', true);
+      }
+    }
     $('d-ms').textContent = `${ms.toFixed(0)} ms`;
 
     // Same line structure as the encode card so the two codeblocks align;
     // the bits use innerHTML to wrap mismatches in <span class="b-bad"> when
     // a reference payload is known.
     const eccTag = eccOk
-      ? (eccErrors === 0 ? 'clean' : `${eccErrors}/8 fixed`)
+      ? (eccErrors === 0 ? 'clean' : `${eccErrors}/${T_BYTES} fixed`)
       : 'uncorrectable';
+    const bchTag = bchOk
+      ? (bchErrors === 0 ? 'clean' : `${bchErrors}/${BCH_T} drift fixed`)
+      : 'drift>7 (BCH failed)';
     const accLine = acc != null
-      ? `payload (896b) acc: ${acc.toFixed(4)}  ·  codeword (1024b) acc: ${codewordAcc.toFixed(4)}  ·  sig: ${sigOk ? 'yes' : 'no'}  ·  ecc: ${eccTag}`
-      : `payload acc: — (no reference)  ·  sig: ${sigOk ? 'yes' : 'no'}  ·  ecc: ${eccTag}`;
-    // Diff highlight runs against the 1024-bit codeword (pre-ECC) so the user
-    // can see exactly which channel bit-flips ECC had to fix.
+      ? `logical (H|sig|pk, 896b) acc: ${acc.toFixed(4)}  ·  wire (817b+pad) acc: ${wireAcc.toFixed(4)}  ·  codeword (1024b) acc: ${codewordAcc.toFixed(4)}\nsig: ${sigOk ? 'yes' : 'no'}  ·  RS ecc: ${eccTag}  ·  BCH pHash: ${bchTag}`
+      : `acc: — (no reference)  ·  sig: ${sigOk ? 'yes' : 'no'}  ·  RS ecc: ${eccTag}  ·  BCH pHash: ${bchTag}`;
+    // Diff highlight: 1024-bit codeword vs the one we embedded — shows the raw
+    // channel bit-flips that RS+BCH had to fix.
     const bitsHtml = chunkBitsHTML(recCodeword, knownCodeword);
+    const recSynStr = (() => {
+      const g = [];
+      for (let i = 0; i < 7; i++) g.push(Array.from(recSyndrome.slice(i * 7, (i + 1) * 7)).join(''));
+      return g.join(' ');
+    })();
     $('dec-output').innerHTML =
-      `image:   ${original.width}×${original.height} → decoded region ${attacked.width}×${attacked.height}\n` +
-      `attack:  ${attackLabel}\n` +
+      `image:    ${original.width}×${original.height} → decoded region ${attacked.width}×${attacked.height}\n` +
+      `attack:   ${attackLabel}\n` +
       `${accLine}\n` +
       `\n` +
-      `H   : ${hex(recH)}\n` +
-      `sig : ${hex(recSig)}\n` +
-      `pk  : ${hex(recPk)}\n` +
+      `H local  : ${hex(H_local)}  (pHash of attacked image, before BCH correction)\n` +
+      `H recov  : ${hex(recH)}  (after BCH correction of ${bchErrors >= 0 ? bchErrors : '?'} bit drift)\n` +
+      `BCH syn  : ${recSynStr}  (49 bits, recovered from codeword)\n` +
+      `sig      : ${hex(recSig)}\n` +
+      `pk       : ${hex(recPk)}\n` +
       `\n` +
       `codeword (1024 bits, diff vs encoded):\n${bitsHtml}`;
 
