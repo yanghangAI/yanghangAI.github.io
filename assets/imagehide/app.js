@@ -1,57 +1,18 @@
 // Versioned dynamic imports so a redeploy busts cached siblings.
 const V = (typeof window !== 'undefined' && window.__imagehideVersion) || 'dev';
 const { computeCrop, splitTrim, pasteBack } = await import(`./trim.js?v=${V}`);
-const { phash128, packPayload, unpackPayload, bitAccuracy, bitsToBytes, bytesToBits,
-        N_H, N_SIG, N_PK, N_BITS } = await import(`./payload.js?v=${V}`);
+const { phash128, packPayload, unpackPayload, bitAccuracy, bitsToBytes,
+        N_H, N_SIG, N_BITS } = await import(`./payload.js?v=${V}`);
 const { psnr, ssim } = await import(`./metrics.js?v=${V}`);
 const { ATTACKS } = await import(`./attacks.js?v=${V}`);
 const { loadModels, encode, decode, getBackend, releaseSession } =
   await import(`./pipeline.js?v=${V}`);
-// Reed-Solomon RS(128, 112) outer ECC — 896 wire bits → 1024 codeword bits,
-// corrects up to 8 byte errors of channel damage.
+// Reed-Solomon (128,112) ECC. Wraps a 896-bit user payload into a 1024-bit
+// codeword the new INN model is trained on; recovers the 896 bits after up
+// to 8 byte-errors of channel damage.
 const { eccEncode, eccDecode, N: ECC_N, K: ECC_K } =
   await import(`./ecc.js?v=${V}`);
-// BCH(127, 78, t=7) Slepian-Wolf compression of pHash. Receiver recomputes
-// pHash from the attacked image; we transmit only a 49-bit syndrome that lets
-// the receiver correct up to 7 bits of pHash drift and recover H exactly.
-const { bchEncodeSyndrome, bchDecode, BCH_SYNDROME_BITS, BCH_T } =
-  await import(`./bch.js?v=${V}`);
-
-const MODEL_BITS = ECC_N * 8;         // 1024 — what the model encoder/decoder see
-const T_BYTES = 8;                    // RS(128, 112) byte-error capacity
-
-// Wire payload (the 896-bit thing eccEncode wraps into the codeword):
-//   [0   .. 49 )  BCH syndrome of pHash (49 bits)
-//   [49  .. 561)  Ed25519 signature      (512 bits)
-//   [561 ..817 )  Ed25519 public key     (256 bits)
-//   [817 ..896 )  zero padding           (79 bits unused; reserved for future use)
-const WIRE_BITS    = N_BITS;          // 896
-const SLEPIAN_BITS = BCH_SYNDROME_BITS + N_SIG + N_PK;   // 49 + 512 + 256 = 817
-const OFF_SYN = 0;
-const OFF_SIG = OFF_SYN + BCH_SYNDROME_BITS;             // 49
-const OFF_PK  = OFF_SIG + N_SIG;                         // 561
-
-function packWirePayload(syndromeBits, sigBytes, pkBytes) {
-  const out = new Uint8Array(WIRE_BITS);   // last 79 bits stay 0
-  out.set(syndromeBits, OFF_SYN);
-  out.set(bytesToBits(sigBytes), OFF_SIG);
-  out.set(bytesToBits(pkBytes),  OFF_PK);
-  return out;
-}
-function unpackWirePayload(bits896) {
-  return {
-    syndrome: bits896.slice(OFF_SYN, OFF_SIG),
-    sig:      bitsToBytes(bits896.slice(OFF_SIG, OFF_PK)),
-    pk:       bitsToBytes(bits896.slice(OFF_PK,  OFF_PK + N_PK)),
-  };
-}
-// pHash is 128 bits but BCH(127) carries 127. Drop the LSB of the last byte
-// (force bit 127 = 0) so encoder and decoder agree on a canonical 16-byte H.
-function canonicalizeH(H16) {
-  const out = Uint8Array.from(H16);
-  out[15] &= 0xFE;
-  return out;
-}
+const MODEL_BITS = ECC_N * 8;        // 1024 — what the model encoder/decoder see
 
 const LIBSODIUM_CDN = 'https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/+esm';
 const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
