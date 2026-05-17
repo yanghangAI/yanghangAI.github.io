@@ -80,56 +80,106 @@ function rgbaToGrayResized(imageData, target) {
   return out;
 }
 
-function dct2_8x8(block) {
-  // Standard type-II 2D DCT on an 8×8 block. Naive O(n^4) is fine for this size.
-  const N = 8;
+// Standard type-II 2D DCT on an N×N block. Naive O(n^4); fine for N ≤ 16.
+function dct2NxN(block, N) {
   const out = new Float64Array(N * N);
+  // Precompute cosines.
+  const cos = new Float64Array(N * N);
+  for (let u = 0; u < N; u++) {
+    for (let x = 0; x < N; x++) {
+      cos[u * N + x] = Math.cos(((2 * x + 1) * u * Math.PI) / (2 * N));
+    }
+  }
   for (let u = 0; u < N; u++) {
     for (let v = 0; v < N; v++) {
       let s = 0;
       for (let y = 0; y < N; y++) {
         for (let x = 0; x < N; x++) {
-          s += block[y * N + x]
-               * Math.cos(((2 * x + 1) * u * Math.PI) / (2 * N))
-               * Math.cos(((2 * y + 1) * v * Math.PI) / (2 * N));
+          s += block[y * N + x] * cos[u * N + x] * cos[v * N + y];
         }
       }
       const cu = u === 0 ? Math.SQRT1_2 : 1;
       const cv = v === 0 ? Math.SQRT1_2 : 1;
-      out[u * N + v] = (cu * cv * s) / 4;
+      out[u * N + v] = (cu * cv * s) * 2 / N;
     }
   }
   return out;
 }
 
-export function phash128(imageData) {
-  // 32×32 gray → take 8×8 average pool to feed DCT8 → mean threshold → 64 bits
-  // → repeat twice to fill 128.
-  const gray32 = rgbaToGrayResized(imageData, 32);
-  const block8 = new Float64Array(64);
-  for (let by = 0; by < 8; by++) {
-    for (let bx = 0; bx < 8; bx++) {
-      let s = 0;
-      for (let dy = 0; dy < 4; dy++) {
-        for (let dx = 0; dx < 4; dx++) {
-          s += gray32[(by * 4 + dy) * 32 + (bx * 4 + dx)];
-        }
+// Zigzag order over a 12×12 grid: anti-diagonal traversal. Used to pick the
+// 128 lowest-frequency coefficients (after dropping DC) from a larger DCT.
+function zigzag12() {
+  const out = [];
+  for (let s = 0; s < 12 + 12 - 1; s++) {
+    if (s & 1) {
+      for (let u = Math.max(0, s - 11); u <= Math.min(s, 11); u++) {
+        out.push([u, s - u]);
       }
-      block8[by * 8 + bx] = s / 16;
+    } else {
+      for (let v = Math.max(0, s - 11); v <= Math.min(s, 11); v++) {
+        out.push([s - v, v]);
+      }
     }
   }
-  const dct = dct2_8x8(block8);
-  // Use the 8×8 block excluding DC (top-left). Threshold on median of remaining 63.
-  const lowfreq = Array.from(dct.slice(1));
-  const sorted = [...lowfreq].sort((a, b) => a - b);
-  const median = sorted[31];
-  const bits64 = new Uint8Array(64);
-  bits64[0] = 1;  // DC bit fixed; not informative
-  for (let i = 1; i < 64; i++) bits64[i] = lowfreq[i - 1] > median ? 1 : 0;
-  // Pack 64 bits → 8 bytes, then duplicate to fill 16 bytes (128 bits)
-  const eight = bitsToBytes(bits64);
-  const sixteen = new Uint8Array(16);
-  sixteen.set(eight, 0);
-  sixteen.set(eight, 8);
-  return sixteen;
+  return out;  // length 144
+}
+
+// Real 128-bit DCT pHash — 128 *unique* bits.
+//
+// Pipeline:
+//   32×32 grayscale (Rec.601 luminance, nearest-neighbor downscale)
+//   → 2×2 mean-pool to 16×16
+//   → 16×16 type-II DCT (256 coeffs)
+//   → take the top-left 12×12 sub-block (144 lowest-freq coeffs)
+//   → drop DC, threshold the remaining 143 at their median
+//   → traverse 12×12 in zigzag order, pick the first 128 non-DC coeffs
+//     → 128 independent bits (one per coefficient)
+//
+// Previous version computed the standard 64-bit 8×8 DCT pHash and duplicated
+// 64 bits to fill 128 — burned half the H slot's collision resistance and
+// halved BCH-syndrome efficiency. This replacement actually carries 128 bits
+// of entropy. Coefficients are in the same frequency range as the prior 8×8
+// pHash (max ~11/32 cycles/source-pixel vs prior 7/32) so robustness to JPEG /
+// resize attacks is comparable.
+export function phash128(imageData) {
+  const gray32 = rgbaToGrayResized(imageData, 32);
+
+  // 2×2 mean-pool to 16×16.
+  const block16 = new Float64Array(16 * 16);
+  for (let by = 0; by < 16; by++) {
+    for (let bx = 0; bx < 16; bx++) {
+      let s = 0;
+      for (let dy = 0; dy < 2; dy++) {
+        for (let dx = 0; dx < 2; dx++) {
+          s += gray32[(by * 2 + dy) * 32 + (bx * 2 + dx)];
+        }
+      }
+      block16[by * 16 + bx] = s / 4;
+    }
+  }
+
+  const dct = dct2NxN(block16, 16);
+
+  // Collect the 143 non-DC coefficients from the top-left 12×12 sub-block.
+  const coeffs = new Float64Array(143);
+  let k = 0;
+  for (let u = 0; u < 12; u++) {
+    for (let v = 0; v < 12; v++) {
+      if (u === 0 && v === 0) continue;
+      coeffs[k++] = dct[u * 16 + v];
+    }
+  }
+  const sorted = Array.from(coeffs).sort((a, b) => a - b);
+  const median = sorted[71];  // 143 / 2 ≈ 71
+
+  // Pick the first 128 non-DC coefficients in zigzag order.
+  const bits = new Uint8Array(128);
+  const zz = zigzag12();
+  let idx = 0;
+  for (const [u, v] of zz) {
+    if (u === 0 && v === 0) continue;
+    if (idx >= 128) break;
+    bits[idx++] = dct[u * 16 + v] > median ? 1 : 0;
+  }
+  return bitsToBytes(bits);
 }
