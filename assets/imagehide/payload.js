@@ -102,9 +102,13 @@ function dct2_8x8(block) {
   return out;
 }
 
-// 3×3 box blur with edge replication. Approximates the Jarosz/Gaussian
-// preprocessing PDQ uses — smooths attack-induced noise (JPEG quantization,
-// resampling artifacts) below pHash bit-threshold boundaries.
+// Full PDQ — Facebook ThreatExchange's perceptual hash, ported to JS in pdq.js.
+// Empirically dominates every other 128-bit pHash we tested (max attack drift
+// 3/128 vs 12/128 for the prior blurred-hybrid). See drift sweep at
+// /work/pi_nwycoff_umass_edu/hang/drift_pdq.py for the benchmark data.
+import { pdq128 } from './pdq.js';
+
+// 3×3 box blur — kept around in case we ever revert. Currently unused by phash128.
 function boxBlur3x3(src, W, H) {
   const out = new Float64Array(W * H);
   for (let y = 0; y < H; y++) {
@@ -125,74 +129,17 @@ function boxBlur3x3(src, W, H) {
   return out;
 }
 
-// 128-bit hybrid perceptual hash: 64 low-freq DCT bits + 64 Block-Mean-Value bits,
-// with PDQ-inspired preprocessing (large downsample + two-pass box blur).
+// 128-bit perceptual hash: full PDQ (low-frequency 128 of the 256-bit PDQ hash).
 //
-//   Half 1 (bits[0..64))  — 64×64 grayscale → 3×3 box blur ×2 → 8×8 mean-pool
-//                            → 8×8 DCT → threshold 63 non-DC at median, bit 0 = 1.
-//                            The 64×64 + blur path mirrors PDQ; the larger source
-//                            averaging stabilizes coefficients against attack noise.
-//   Half 2 (bits[64..128)) — 16×16 grayscale → 3×3 box blur ×2 → 2×2 mean-pool
-//                            to 8×8 → threshold each cell mean against global mean.
-//                            Independent algorithm; survives attacks that move the
-//                            DCT phase but preserve block luminance structure.
+// PDQ is Facebook ThreatExchange's perceptual hash, designed for adversarial
+// image-match detection in the wild (used by NCMEC for CSAM matching). On our
+// 30-image COCO sweep through the demo's 11-attack catalog, PDQ caps drift at
+// 3/128 bits (vs 12/128 for the previous blurred-hybrid), so BCH(127, 78, t=7)
+// covers 100% of typical photos with multiple bits of headroom.
 //
-// Empirical drift sweep across 30 diverse COCO images at 512×512, vs the demo's
-// 11-attack catalog (JPEG q40+, resize 0.5+, chain_wechat, etc.):
-//   worst-image max drift: 12/128 bits
-//   p95 worst:             7/128
-//   median worst:          4/128
-//   BCH(127,78,t=7) covers 93% of images (up from 77% with the unblurred hybrid,
-//   37% with the high-freq-only DCT-128 variant).
+// Implementation lives in pdq.js. Cost: ~30-60ms per call on a 512x512 input
+// (vs ~10ms for the previous hybrid). Negligible next to the model's ~1-5s
+// forward pass.
 export function phash128(imageData) {
-  // -------- Half 1: 64-bit low-freq DCT (PDQ-style 64×64 + blur + 8×8 pool) --------
-  const gray64 = rgbaToGrayResized(imageData, 64);
-  const blurred64 = boxBlur3x3(boxBlur3x3(gray64, 64, 64), 64, 64);
-  const block8 = new Float64Array(64);
-  for (let by = 0; by < 8; by++) {
-    for (let bx = 0; bx < 8; bx++) {
-      let s = 0;
-      for (let dy = 0; dy < 8; dy++) {
-        for (let dx = 0; dx < 8; dx++) {
-          s += blurred64[(by * 8 + dy) * 64 + (bx * 8 + dx)];
-        }
-      }
-      block8[by * 8 + bx] = s / 64;
-    }
-  }
-  const dct = dct2_8x8(block8);
-  const lowfreq = Array.from(dct.slice(1));
-  const sortedLF = [...lowfreq].sort((a, b) => a - b);
-  const medianLF = sortedLF[31];
-  const bitsDct = new Uint8Array(64);
-  bitsDct[0] = 1;  // DC bit fixed; non-informative
-  for (let i = 1; i < 64; i++) bitsDct[i] = lowfreq[i - 1] > medianLF ? 1 : 0;
-
-  // -------- Half 2: 64-bit Block Mean Value (16×16 + blur + 2×2 pool) --------
-  const gray16 = rgbaToGrayResized(imageData, 16);
-  const blurred16 = boxBlur3x3(boxBlur3x3(gray16, 16, 16), 16, 16);
-  const block8b = new Float64Array(64);
-  let total = 0;
-  for (let by = 0; by < 8; by++) {
-    for (let bx = 0; bx < 8; bx++) {
-      let s = 0;
-      for (let dy = 0; dy < 2; dy++) {
-        for (let dx = 0; dx < 2; dx++) {
-          s += blurred16[(by * 2 + dy) * 16 + (bx * 2 + dx)];
-        }
-      }
-      const m = s / 4;
-      block8b[by * 8 + bx] = m;
-      total += m;
-    }
-  }
-  const meanThreshold = total / 64;
-  const bitsBmv = new Uint8Array(64);
-  for (let i = 0; i < 64; i++) bitsBmv[i] = block8b[i] > meanThreshold ? 1 : 0;
-
-  // -------- Concatenate to 128 bits, pack to 16 bytes --------
-  const allBits = new Uint8Array(128);
-  allBits.set(bitsDct, 0);
-  allBits.set(bitsBmv, 64);
-  return bitsToBytes(allBits);
+  return pdq128(imageData);
 }
