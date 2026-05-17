@@ -211,7 +211,7 @@ function onEncImage({ imageData, origW, origH }, name) {
   enc.origW = origW; enc.origH = origH;
   enc.crop = computeCrop(imageData.height, imageData.width);
 
-  drawThumb($('cover'), imageData);
+  drawToCanvas($('cover'), imageData);
   const dim = `${imageData.width}×${imageData.height}` +
     (origW !== imageData.width ? ` · from ${origW}×${origH}` : '');
   $('enc-name').textContent = `${name} · ${dim}`;
