@@ -1,8 +1,11 @@
-import { computeCrop, splitTrim, pasteBack } from './trim.js';
-import { phash128, packPayload, unpackPayload, bitAccuracy, N_H } from './payload.js';
-import { psnr, ssim } from './metrics.js';
-import { ATTACKS } from './attacks.js';
-import { loadModels, encode, decode, getBackend, releaseSession } from './pipeline.js';
+// Versioned dynamic imports — the HTML stamps `window.__imagehideVersion`
+// from Jekyll build time so a redeploy busts every cached sibling module.
+const V = (typeof window !== 'undefined' && window.__imagehideVersion) || 'dev';
+const { computeCrop, splitTrim, pasteBack } = await import(`./trim.js?v=${V}`);
+const { phash128, packPayload, unpackPayload, bitAccuracy, N_H } = await import(`./payload.js?v=${V}`);
+const { psnr, ssim } = await import(`./metrics.js?v=${V}`);
+const { ATTACKS } = await import(`./attacks.js?v=${V}`);
+const { loadModels, encode, decode, getBackend, releaseSession } = await import(`./pipeline.js?v=${V}`);
 
 const LIBSODIUM_CDN = 'https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/+esm';
 const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);

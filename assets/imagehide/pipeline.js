@@ -23,7 +23,10 @@ let activeBackend = 'wasm';   // worker uses WASM; reported to UI for honesty
 let nextMsgId = 1;
 const pending = new Map();
 
-const WORKER_URL = new URL('./decoder-worker.js', import.meta.url);
+// Worker URL with cache-bust query so a redeploy reloads the worker source.
+const V = (typeof self !== 'undefined' && self.__imagehideVersion) ||
+          (typeof window !== 'undefined' && window.__imagehideVersion) || 'dev';
+const WORKER_URL = new URL(`./decoder-worker.js?v=${V}`, import.meta.url);
 
 function ensureWorker() {
   if (worker) return worker;

@@ -64,4 +64,11 @@ lede: "Live demo of the MWIP (Minimal Whole-Image Provenance) INN watermark. Upl
 
 </section>
 
-<script type="module" src="{{ '/assets/imagehide/app.js' | relative_url }}"></script>
+<script type="module">
+  // Cache-bust modules on every site build so an update of pipeline.js or any
+  // sibling module isn't served stale by an aggressive browser cache (Safari
+  // especially). The build timestamp from Jekyll is the version key.
+  const v = '{{ site.time | date: "%s" }}';
+  window.__imagehideVersion = v;
+  await import(`{{ '/assets/imagehide/app.js' | relative_url }}?v=${v}`);
+</script>
