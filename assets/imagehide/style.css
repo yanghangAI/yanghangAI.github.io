@@ -354,7 +354,8 @@
   gap: 0.6rem;
   margin-bottom: 0.8rem;
 }
-.ih-canvases--single { grid-template-columns: 1fr; }
+.ih-canvases--single { grid-template-columns: 1fr; max-width: 22rem; }
+.ih-canvases--single canvas { max-height: 18rem; width: auto; max-width: 100%; margin: 0 auto; object-fit: contain; }
 .ih-canvases figure { margin: 0; }
 .ih-canvases canvas {
   display: block;
