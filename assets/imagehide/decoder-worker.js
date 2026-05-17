@@ -50,16 +50,8 @@ function diag(msg) {
   try { self.postMessage({ id: 0, type: 'diag', message: `${_DIAG_TAG} ${msg}` }); } catch (_) {}
 }
 
-function isIOS() {
-  // iOS Safari + iOS Chrome (which uses WebKit). WebGPU on iOS is still
-  // crashy enough in workers to be net-negative; skip it.
-  const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
-  return /iPhone|iPad|iPod/i.test(ua);
-}
-
 async function detectWebGPU() {
   if (typeof navigator === 'undefined' || !('gpu' in navigator)) return false;
-  if (isIOS()) return false;
   try {
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
