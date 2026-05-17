@@ -48,7 +48,7 @@ lede: "Live demo of the MWIP (Minimal Whole-Image Provenance) INN watermark. Upl
   </p>
 
   <p class="imagehide__perf-note">
-    <strong>Production inference time</strong> per pass. Encode and decode are the same INN backbone run forward and reverse, so per-pass cost is approximately equal — one number covers both. Numbers anchor at the model card&#39;s target of ≤ 1 s for 12 MP on a phone NPU and scale linearly with pixel count (the INN is fully convolutional). Variance ±2× across hardware generations.
+    <strong>Production inference time</strong> per pass. Encode and decode are the same INN backbone run forward and reverse, so per-pass cost is approximately equal — one number covers both. Numbers anchor at the model card&#39;s target of ≤ 1 s for 12 MP on a phone NPU and scale linearly with pixel count (the INN is fully convolutional). Variance ±2× across hardware generations. <strong>The browser-WASM mobile timing you see above is roughly 100–500× slower than the phone NPU production target; server GPU is another ~10× faster on top.</strong>
   </p>
   <table class="imagehide__perf-table">
     <thead>
