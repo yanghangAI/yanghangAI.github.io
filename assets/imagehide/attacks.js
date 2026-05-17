@@ -65,14 +65,19 @@ export async function resize(img, scale) {
   const small = new OffscreenCanvas(sw, sh);
   const sctx = small.getContext('2d');
   sctx.imageSmoothingEnabled = true;
-  sctx.imageSmoothingQuality = 'medium';   // 'medium' approximates bilinear
+  // 'low' = plain bilinear without anti-aliasing pre-filter — matches PyTorch's
+  // F.interpolate(mode='bilinear', align_corners=False), which is what the model
+  // was trained against. 'medium' applied a Mitchell-Netravali low-pass that
+  // destroyed the high-frequency band the watermark encodes in, dropping
+  // chain_wechat bit-acc to ~0.80 in the demo despite ~0.99 in eval.
+  sctx.imageSmoothingQuality = 'low';
   sctx.drawImage(srcCanvas, 0, 0, sw, sh);
   freeCanvas(srcCanvas);
 
   const big = new OffscreenCanvas(W, H);
   const bctx = big.getContext('2d');
   bctx.imageSmoothingEnabled = true;
-  bctx.imageSmoothingQuality = 'medium';
+  bctx.imageSmoothingQuality = 'low';
   bctx.drawImage(small, 0, 0, W, H);
   freeCanvas(small);
 
