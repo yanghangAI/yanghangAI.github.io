@@ -74,6 +74,7 @@ let lastCodewordBits = null;    // 1024-bit RS codeword
 let lastH = null;                // canonical 16-byte H (LSB of last byte cleared)
 let lastSyndrome = null;         // 28-bit BCH syndrome
 let lastLogicalParts = null;     // { H, sig, pk } for display + bit-acc
+let lastSource = null;           // 'auto' | 'custom' — what payload mode encoded lastContainer
 
 const enc = { cover: null, origW: 0, origH: 0, crop: null, busy: false };
 const dec = { upload: null, busy: false };
@@ -440,6 +441,7 @@ async function runEncode() {
     lastH = H;
     lastSyndrome = syndrome;
     lastLogicalParts = parts;
+    lastSource = source;
 
     drawToCanvas($('container'), fullContainer);
     drawResidual($('residual'), core, container, 10);
@@ -702,10 +704,48 @@ async function runDecode() {
       accEl.textContent = '—';
       accEl.classList.remove('is-ok', 'is-bad');
     }
+    // Detect whether this container was encoded in custom-text mode. For our
+    // own last container we know exactly; for uploads we heuristically check
+    // whether the recovered sig+pk bytes look like printable UTF-8 text.
+    const recTextBytes = new Uint8Array([...recSig, ...recPk]);
+    const isLikelyText = (() => {
+      let printable = 0, total = 0;
+      for (const b of recTextBytes) {
+        if (b === 0) continue;  // NUL padding, doesn't count for/against
+        total++;
+        if ((b >= 0x20 && b <= 0x7E) || b === 0x09 || b === 0x0A) printable++;
+      }
+      return total > 0 && printable / total > 0.85;
+    })();
+    const isCustomMode = (src === 'last' && lastSource)
+      ? lastSource === 'custom'
+      : isLikelyText;
+
     const sigEl = $('d-sig');
-    sigEl.textContent = sigOk ? '✓' : '✗';
-    sigEl.classList.toggle('is-ok', sigOk);
-    sigEl.classList.toggle('is-bad', !sigOk);
+    const sigLblEl = $('d-sig-lbl');
+    if (isCustomMode) {
+      // Replace the "signature" stat with a "message" stat. ✓ iff text round-
+      // tripped exactly (known reference); otherwise just ✓ to indicate "text
+      // mode detected — see message line below".
+      sigLblEl.textContent = 'message';
+      let messageOk = true;
+      if (src === 'last' && lastLogicalParts) {
+        const refTextBytes = new Uint8Array([
+          ...lastLogicalParts.sig, ...lastLogicalParts.pk,
+        ]);
+        for (let i = 0; i < refTextBytes.length; i++) {
+          if (refTextBytes[i] !== recTextBytes[i]) { messageOk = false; break; }
+        }
+      }
+      sigEl.textContent = messageOk ? '✓' : '✗';
+      sigEl.classList.toggle('is-ok', messageOk);
+      sigEl.classList.toggle('is-bad', !messageOk);
+    } else {
+      sigLblEl.textContent = 'signature';
+      sigEl.textContent = sigOk ? '✓' : '✗';
+      sigEl.classList.toggle('is-ok', sigOk);
+      sigEl.classList.toggle('is-bad', !sigOk);
+    }
 
     // When a reference is known (decoding our own last container), compute the
     // ACTUAL byte- and bit-error counts so the stat tiles can show real numbers
@@ -768,27 +808,34 @@ async function runDecode() {
     } else {
       bchTag = 'drift>7';
     }
+    const verifyTag = isCustomMode ? '' : `sig: ${sigOk ? 'yes' : 'no'}  ·  `;
     const accLine = acc != null
-      ? `logical (H|sig|pk, 896b) acc: ${acc.toFixed(4)}  ·  wire (796b) acc: ${wireAcc.toFixed(4)}  ·  codeword (1024b) acc: ${codewordAcc.toFixed(4)}\nsig: ${sigOk ? 'yes' : 'no'}  ·  RS ecc: ${eccTag}  ·  BCH pHash: ${bchTag}`
-      : `acc: — (no reference)  ·  sig: ${sigOk ? 'yes' : 'no'}  ·  RS ecc: ${eccTag}  ·  BCH pHash: ${bchTag}`;
+      ? `logical (H|sig|pk, 896b) acc: ${acc.toFixed(4)}  ·  wire (796b) acc: ${wireAcc.toFixed(4)}  ·  codeword (1024b) acc: ${codewordAcc.toFixed(4)}\n${verifyTag}RS ecc: ${eccTag}  ·  BCH pHash: ${bchTag}`
+      : `acc: — (no reference)  ·  ${verifyTag}RS ecc: ${eccTag}  ·  BCH pHash: ${bchTag}`;
     const bitsHtml = chunkBitsHTML(recCodeword, knownCodeword);
     const recSynStr = (() => {
       const g = [];
       for (let i = 0; i < BCH_T; i++) g.push(Array.from(recSyndrome.slice(i * 7, (i + 1) * 7)).join(''));
       return g.join(' ');
     })();
-    const recText = bytesToCustomText(new Uint8Array([...recSig, ...recPk]));
+    const recText = bytesToCustomText(recTextBytes);
+    const messageLine = isCustomMode
+      ? `message  : "${escapeHtml(recText)}"\n`
+      : '';
+    const sigLines = isCustomMode
+      ? ''
+      : `sig      : ${hex(recSig)}\n` +
+        `pk       : ${hex(recPk)}\n`;
     $('dec-output').innerHTML =
       `image:    ${original.width}×${original.height} → decoded region ${attacked.width}×${attacked.height}\n` +
       `attack:   ${attackLabel}\n` +
       `${accLine}\n` +
       `\n` +
-      `message  : "${escapeHtml(recText)}"  (sig+pk slots read as UTF-8; gibberish in auto mode)\n` +
+      messageLine +
       `H local  : ${hex(H_local)}  (pHash of attacked image, before BCH correction)\n` +
       `H recov  : ${hex(recH)}  (after BCH correction of ${bchErrors >= 0 ? bchErrors : '?'} bit drift)\n` +
       `BCH syn  : ${recSynStr}  (49 bits, recovered from codeword)\n` +
-      `sig      : ${hex(recSig)}\n` +
-      `pk       : ${hex(recPk)}\n` +
+      sigLines +
       `\n` +
       `codeword (1024 bits, diff vs encoded):\n${bitsHtml}`;
 
