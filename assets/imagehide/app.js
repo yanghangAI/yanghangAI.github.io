@@ -283,11 +283,22 @@ function drawResidual(canvas, coverCore, containerCore, scale) {
   canvas.getContext('2d').putImageData(new ImageData(data, W, H), 0, 0);
 }
 
+// WASM linear memory cannot shrink. Each decoder run leaves a high-water mark
+// of ~40-60 MB of intermediates that the heap holds onto. Terminating the
+// worker is the only way to give that memory back to the OS. On mobile we pay
+// the ~200-500 ms re-init cost on every attack to stay under the ~300 MB tab
+// budget; on desktop we can amortize across a few attacks.
+const WORKER_RESET_EVERY = IS_MOBILE ? 1 : 3;
+
 async function runAttacks() {
   state.status = 'running-attacks';
   const enabled = new Set(
     [...els.attackList.querySelectorAll('input[type="checkbox"]:checked')]
       .map(el => el.value));
+  // Free the residual canvas backing buffer — on iOS retina this reclaims
+  // ~8 MB of GPU canvas memory. The image has already been seen; nobody
+  // re-examines it during the attack loop.
+  els.residual.width = 1; els.residual.height = 1;
   // Reset rows
   for (const a of ATTACKS) {
     const row = document.getElementById(`row-${a.id}`);
@@ -295,6 +306,7 @@ async function runAttacks() {
     row.classList.toggle('running', false);
     row.querySelectorAll('td').forEach((td, idx) => { if (idx > 0) td.textContent = '—'; td.classList.remove('sig-ok', 'sig-no'); });
   }
+  let sinceReset = 0;
   for (const a of ATTACKS) {
     if (!enabled.has(a.id)) continue;
     const row = document.getElementById(`row-${a.id}`);
@@ -308,9 +320,12 @@ async function runAttacks() {
       // Attacks run on the (already-cropped, capped-size) core, not the full
       // original — saves an order of magnitude of memory on phone-sized inputs.
       const aContCore = await a.fn(state.coreContainer);
-      const aCovCore  = await a.fn(state.coreCover);
+      let aCovCore    = await a.fn(state.coreCover);
       const p = psnr(aContCore, aCovCore);
       const s = ssim(aContCore, aCovCore);
+      // Drop the attacked-cover working buffer before the decoder allocates
+      // its ~6 MB Float32 tensor + intermediates — keeps the decode peak lower.
+      aCovCore = null;
       const { bits: recBits } = await decode(aContCore);
       const acc = bitAccuracy(recBits, state.payloadBits);
       const { H: recH, sig: recSig } = unpackPayload(recBits);
@@ -328,9 +343,16 @@ async function runAttacks() {
       setStatus(`Attack ${a.label} failed: ${e.message}`, true);
     }
     row.classList.remove('running');
+    sinceReset++;
+    if (sinceReset >= WORKER_RESET_EVERY) {
+      // Recycle the worker: terminate to release WASM heap, then the next
+      // decode call lazily re-spawns it from cached model bytes.
+      releaseSession();
+      sinceReset = 0;
+      // Yield once so the browser can actually reclaim before next attack.
+      await new Promise(r => setTimeout(r, 100));
+    }
   }
-  // Terminate the inference worker so its WASM heap is released to the OS.
-  // The next Run will re-spawn it cheaply from the cached model bytes.
   releaseSession();
   setStatus('Done. (worker terminated; WASM memory freed)');
 }
