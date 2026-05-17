@@ -13,7 +13,7 @@
  *
  * Replies:
  *   { id, type: 'ready'  }
- *   { id, type: 'encoded', imageBuf, ms }
+ *   { id, type: 'encoded', f32Buf,   ms }   // Float32Array CHW, [-1, 1]
  *   { id, type: 'decoded', bitsBuf,  ms }
  *   { id, type: 'error',   message }
  *
@@ -78,20 +78,9 @@ function imageBufToFloat32CHW(buf, W, H) {
   return out;
 }
 
-function float32CHWtoImageBuf(arr, W, H) {
-  const out = new Uint8ClampedArray(H * W * 4);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const pi = y * W + x;
-      const i = pi * 4;
-      out[i]     = Math.round(Math.min(255, Math.max(0, (arr[pi]             + 1) * 127.5)));
-      out[i + 1] = Math.round(Math.min(255, Math.max(0, (arr[H * W + pi]     + 1) * 127.5)));
-      out[i + 2] = Math.round(Math.min(255, Math.max(0, (arr[2 * H * W + pi] + 1) * 127.5)));
-      out[i + 3] = 255;
-    }
-  }
-  return out.buffer;
-}
+// (Removed float32CHWtoImageBuf — main thread now handles f32 → uint8 conversion
+// so we can keep the float32 container alive for the attack pipeline. The worker
+// returns the raw clamped Float32 CHW buffer.)
 
 async function handle(msg) {
   if (msg.type === 'init') {
@@ -131,9 +120,19 @@ async function handle(msg) {
     const t0 = performance.now();
     const { container_rgb } = await session.run({ host_rgb: imgT, bits: bitsT });
     const ms = performance.now() - t0;
-    const outBuf = float32CHWtoImageBuf(container_rgb.data, W, H);
+    // Copy the Float32 CHW data out of ORT-owned session memory (clamped to
+    // [-1, 1] to remove tiny overshoots), then transfer the buffer to the
+    // main thread. Main thread converts to uint8 ImageData for display and
+    // keeps the float32 version for the attack pipeline so sub-uint8 residual
+    // survives the resize step.
+    const src = container_rgb.data;
+    const f32Out = new Float32Array(src.length);
+    for (let i = 0; i < src.length; i++) {
+      const v = src[i];
+      f32Out[i] = v < -1 ? -1 : (v > 1 ? 1 : v);
+    }
     disposeTensor(imgT); disposeTensor(bitsT); disposeTensor(container_rgb);
-    return { type: 'encoded', imageBuf: outBuf, ms, transfer: [outBuf] };
+    return { type: 'encoded', f32Buf: f32Out.buffer, ms, transfer: [f32Out.buffer] };
   }
 
   if (msg.type === 'decode') {

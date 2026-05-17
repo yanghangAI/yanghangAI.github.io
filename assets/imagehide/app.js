@@ -4,7 +4,8 @@ const { computeCrop, splitTrim, pasteBack } = await import(`./trim.js?v=${V}`);
 const { phash128, packPayload, unpackPayload, bitAccuracy, bitsToBytes, bytesToBits,
         N_H, N_SIG, N_PK, N_BITS } = await import(`./payload.js?v=${V}`);
 const { psnr, ssim } = await import(`./metrics.js?v=${V}`);
-const { ATTACKS } = await import(`./attacks.js?v=${V}`);
+const { ATTACKS, imageDataToFrame, frameToImageData } =
+  await import(`./attacks.js?v=${V}`);
 const { loadModels, encode, decode, getBackend, releaseSession } =
   await import(`./pipeline.js?v=${V}`);
 // Outer ECC: RS(128, 100) over GF(2^8). 796 wire bits -> 1024-bit codeword
@@ -75,6 +76,9 @@ let lastH = null;                // canonical 16-byte H (LSB of last byte cleare
 let lastSyndrome = null;         // 28-bit BCH syndrome
 let lastLogicalParts = null;     // { H, sig, pk } for display + bit-acc
 let lastSource = null;           // 'auto' | 'custom' — what payload mode encoded lastContainer
+let lastContainerCoreF32 = null; // Float32Array CHW [-1,1] of the encoded core region
+let lastContainerCoreW = 0;
+let lastContainerCoreH = 0;
 
 const enc = { cover: null, origW: 0, origH: 0, crop: null, busy: false };
 const dec = { upload: null, busy: false };
@@ -428,7 +432,7 @@ async function runEncode() {
     const wireBits = packWirePayload(syndrome, sig, pk);
     const codeword = eccEncode(wireBits);
 
-    const { container, ms } = await encode(core, codeword);
+    const { container, containerF32, ms } = await encode(core, codeword);
     const psnrV = psnr(container, core);
     const ssimV = ssim(container, core);
 
@@ -436,6 +440,9 @@ async function runEncode() {
                                     enc.cover.width, enc.cover.height);
 
     lastContainer = fullContainer;
+    lastContainerCoreF32 = containerF32;
+    lastContainerCoreW = container.width;
+    lastContainerCoreH = container.height;
     lastPayloadBits = wireBits;
     lastCodewordBits = codeword;
     lastH = H;
@@ -633,17 +640,36 @@ async function runDecode() {
         `decode region ${crop.cropW}x${crop.cropH} is below the 256x256 ` +
         `minimum baked into the ONNX trace`);
     }
-    const { core } = splitTrim(original, crop);
+
+    // Build the Frame fed to the attack. For "last" we use the float32
+    // container straight from the encoder — sub-uint8 residual survives the
+    // resize step, matching the eval pipeline that keeps the container in
+    // float32 between encoder and attack. For uploaded images we have no
+    // float32 reference; convert from uint8 ImageData (no precision gain
+    // there, but the resize algorithm at least matches PyTorch).
+    let coreFrame, coreImageData;
+    if (src === 'last' && lastContainerCoreF32 &&
+        lastContainerCoreW === crop.cropW && lastContainerCoreH === crop.cropH) {
+      coreFrame = {
+        dataF32: lastContainerCoreF32,
+        width:   lastContainerCoreW,
+        height:  lastContainerCoreH,
+      };
+      coreImageData = frameToImageData(coreFrame);
+    } else {
+      coreImageData = splitTrim(original, crop).core;
+      coreFrame = imageDataToFrame(coreImageData);
+    }
 
     const attackId = $('dec-attack').value;
-    let attacked = core;
+    let attacked = coreImageData;
     let attackLabel = 'none';
     if (attackId !== 'none') {
       const a = ATTACKS.find(x => x.id === attackId);
       if (!a) throw new Error(`unknown attack: ${attackId}`);
       attackLabel = a.label;
       setStatus('dec', `Applying ${attackLabel}…`);
-      attacked = await a.fn(core);
+      attacked = await a.fn(coreFrame);
     }
 
     setStatus('dec', `Decoding ${attacked.width}×${attacked.height}…`);

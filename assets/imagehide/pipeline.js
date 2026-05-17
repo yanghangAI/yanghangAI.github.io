@@ -132,8 +132,26 @@ export async function encode(coverImageData, bitsUint8) {
     { type: 'encode', imageBuf, W, H, bitsBuf },
     [imageBuf, bitsBuf],
   );
+  // Worker now returns Float32 CHW directly. We keep the float32 buffer for the
+  // attack pipeline (sub-uint8 residual survives the resize step) and also
+  // materialize a uint8 ImageData copy for display / pasteBack / PSNR.
+  const containerF32 = new Float32Array(r.f32Buf);
+  const u8 = new Uint8ClampedArray(H * W * 4);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const pi = y * W + x;
+      const i  = pi * 4;
+      u8[i]     = Math.round(Math.max(0, Math.min(255, (containerF32[pi]             + 1) * 127.5)));
+      u8[i + 1] = Math.round(Math.max(0, Math.min(255, (containerF32[H * W + pi]     + 1) * 127.5)));
+      u8[i + 2] = Math.round(Math.max(0, Math.min(255, (containerF32[2 * H * W + pi] + 1) * 127.5)));
+      u8[i + 3] = 255;
+    }
+  }
   return {
-    container: { data: new Uint8ClampedArray(r.imageBuf), width: W, height: H },
+    container: { data: u8, width: W, height: H },
+    containerF32,  // Float32Array, length 3*H*W, CHW, [-1, 1]
+    width: W,
+    height: H,
     ms: r.ms,
   };
 }
