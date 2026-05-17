@@ -52,7 +52,38 @@ lede: "Live demo of the MWIP (Minimal Whole-Image Provenance) INN watermark. Upl
     <li><strong>Server GPU</strong>, native ONNX Runtime with fp16: 5–20&nbsp;ms.</li>
   </ul>
   <p class="imagehide__perf-note">
-    The demo gives up most of that headroom on purpose: it&#39;s single-threaded (browser WASM can&#39;t use threads without server-side COOP/COEP headers, which GitHub Pages doesn&#39;t serve), fp32 instead of fp16, one image at a time instead of batched, and pays a JS↔WASM marshaling cost on every tensor crossing.
+    The demo gives up most of that headroom on purpose: it&#39;s single-threaded (browser WASM can&#39;t use threads without server-side COOP/COEP headers, which GitHub Pages doesn&#39;t serve), fp32 decoder + fp16 encoder (full fp16 conversion of the decoder fights the converter), one image at a time instead of batched, and pays a JS↔WASM marshaling cost on every tensor crossing.
+  </p>
+
+  <p class="imagehide__perf-note">
+    <strong>Why your image got downsampled.</strong> Browsers cap per-tab memory tightly (≈ 300 MB on iOS Safari, a few GB on desktop). The decoder allocates ≈ 12 MB of float32 tensor per megapixel, plus intermediate buffers; running 11 attacks on a 12 MP phone photo overruns Safari and crashes the tab. To stay inside that envelope the demo auto-resizes any input above <strong>1 MP on mobile</strong> or <strong>2 MP on desktop</strong>, preserving aspect ratio. A typical 12 MP phone photo becomes ~1224×816 (desktop) or ~866×577 (mobile). The model itself has no such limit — on a phone NPU or server it runs the full 12 MP without resizing.
+  </p>
+
+  <p class="imagehide__perf-note">
+    <strong>Estimated production inference time</strong> for common photo sizes (single encode-or-decode pass, no demo overhead):
+  </p>
+  <table class="imagehide__perf-table">
+    <thead>
+      <tr>
+        <th>Photo size</th>
+        <th>Pixels</th>
+        <th>Phone NPU</th>
+        <th>Server GPU (fp16)</th>
+        <th>Server CPU (AVX-512, 8&nbsp;threads)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Instagram post</td>           <td>1080 × 1080 (1.2&nbsp;MP)</td> <td>~80&nbsp;ms</td>  <td>~7&nbsp;ms</td>   <td>~30&nbsp;ms</td></tr>
+      <tr><td>1080p screen capture</td>     <td>1920 × 1080 (2.1&nbsp;MP)</td> <td>~140&nbsp;ms</td> <td>~12&nbsp;ms</td>  <td>~55&nbsp;ms</td></tr>
+      <tr><td>iPhone screenshot</td>        <td>1179 × 2556 (3.0&nbsp;MP)</td> <td>~200&nbsp;ms</td> <td>~17&nbsp;ms</td>  <td>~80&nbsp;ms</td></tr>
+      <tr><td>16″ MacBook screenshot</td>   <td>3456 × 2234 (7.7&nbsp;MP)</td> <td>~510&nbsp;ms</td> <td>~45&nbsp;ms</td>  <td>~200&nbsp;ms</td></tr>
+      <tr><td>Phone camera (default)</td>   <td>4032 × 3024 (12&nbsp;MP)</td>  <td>~1.0&nbsp;s</td>  <td>~70&nbsp;ms</td>  <td>~300&nbsp;ms</td></tr>
+      <tr><td>Phone HQ / iPhone 24&nbsp;MP</td><td>5712 × 4284 (24&nbsp;MP)</td><td>~2.0&nbsp;s</td>  <td>~140&nbsp;ms</td> <td>~600&nbsp;ms</td></tr>
+      <tr><td>Full-frame DSLR (Sony A7&nbsp;IV)</td><td>7008 × 4672 (33&nbsp;MP)</td><td>~2.7&nbsp;s</td><td>~190&nbsp;ms</td><td>~830&nbsp;ms</td></tr>
+    </tbody>
+  </table>
+  <p class="imagehide__perf-note">
+    Phone NPU column anchors at the model card&#39;s target of <strong>≤ 1 s for 12 MP</strong> and scales linearly with pixel count (the INN is fully convolutional, so cost is proportional to spatial size). Server numbers extrapolate from typical ORT-native throughput for a 251 K-parameter convolutional model. Variance ±2× depending on hardware generation.
   </p>
 
   <div class="imagehide__controls">
