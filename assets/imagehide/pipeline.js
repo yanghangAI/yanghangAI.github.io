@@ -18,19 +18,22 @@ let decoderSession = null;
 let activeBackend = null;
 let loadPromise = null;
 
-const ORT_CDN = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.0/dist/ort.webgpu.min.mjs';
+// Pick the bundle based on device class. The WebGPU bundle initializes WebGPU
+// on import — on iOS Safari that init itself can OOM and leave no backend at
+// all. The plain bundle is WASM (+ WebGL) only and is memory-predictable on
+// mobile; desktop pays a small speed cost but the demo stays reliable.
+const ORT_VERSION = '1.20.0';
+const ORT_BASE = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
 
 function isMobile() {
   return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 }
 
+const ORT_BUNDLE = isMobile() ? `${ORT_BASE}ort.min.mjs` : `${ORT_BASE}ort.webgpu.min.mjs`;
+
 async function detectWebGPU() {
-  if (!('gpu' in navigator)) return false;
-  // iOS Safari WebGPU sessions accumulate compute-pipeline memory across
-  // inference calls and kill tabs shortly after a batch completes. WASM is
-  // slower but memory-stable. Same observed pattern on Android Chrome under
-  // ORT-web 1.20 — gate by UA to be safe.
   if (isMobile()) return false;
+  if (!('gpu' in navigator)) return false;
   try {
     const adapter = await navigator.gpu.requestAdapter();
     return !!adapter;
@@ -42,14 +45,18 @@ export function getBackend() { return activeBackend; }
 export async function loadModels(encoderUrl, decoderUrl, onProgress) {
   if (loadPromise) return loadPromise;
   loadPromise = (async () => {
-    if (!ort) ort = await import(/* @vite-ignore */ ORT_CDN);
+    if (!ort) ort = await import(/* @vite-ignore */ ORT_BUNDLE);
+    // Point WASM at the CDN so it finds its .wasm files.
+    if (ort.env && ort.env.wasm) ort.env.wasm.wasmPaths = ORT_BASE;
     activeBackend = (await detectWebGPU()) ? 'webgpu' : 'wasm';
     // Fetch both .onnx files with a shared progress callback.
     const [encBuf, decBuf] = await Promise.all([
       fetchWithProgress(encoderUrl, onProgress, 'encoder'),
       fetchWithProgress(decoderUrl, onProgress, 'decoder'),
     ]);
-    const sessionOpts = { executionProviders: [activeBackend] };
+    // Tell ORT to use the chosen backend first, then fall back to wasm.
+    const providers = activeBackend === 'webgpu' ? ['webgpu', 'wasm'] : ['wasm'];
+    const sessionOpts = { executionProviders: providers };
     encoderSession = await ort.InferenceSession.create(encBuf, sessionOpts);
     decoderSession = await ort.InferenceSession.create(decBuf, sessionOpts);
   })();
