@@ -819,25 +819,26 @@ async function runDecode() {
       return g.join(' ');
     })();
     const recText = bytesToCustomText(recTextBytes);
-    const messageLine = isCustomMode
-      ? `message  : "${escapeHtml(recText)}"\n`
-      : '';
-    const sigLines = isCustomMode
-      ? ''
-      : `sig      : ${hex(recSig)}\n` +
-        `pk       : ${hex(recPk)}\n`;
-    $('dec-output').innerHTML =
-      `image:    ${original.width}×${original.height} → decoded region ${attacked.width}×${attacked.height}\n` +
-      `attack:   ${attackLabel}\n` +
-      `${accLine}\n` +
-      `\n` +
-      messageLine +
-      `H local  : ${hex(H_local)}  (pHash of attacked image, before BCH correction)\n` +
-      `H recov  : ${hex(recH)}  (after BCH correction of ${bchErrors >= 0 ? bchErrors : '?'} bit drift)\n` +
-      `BCH syn  : ${recSynStr}  (49 bits, recovered from codeword)\n` +
-      sigLines +
-      `\n` +
-      `codeword (1024 bits, diff vs encoded):\n${bitsHtml}`;
+    if (isCustomMode) {
+      $('dec-output').innerHTML =
+        `image:    ${original.width}×${original.height} → decoded region ${attacked.width}×${attacked.height}\n` +
+        `attack:   ${attackLabel}\n` +
+        `\n` +
+        `message  : "${escapeHtml(recText)}"`;
+    } else {
+      $('dec-output').innerHTML =
+        `image:    ${original.width}×${original.height} → decoded region ${attacked.width}×${attacked.height}\n` +
+        `attack:   ${attackLabel}\n` +
+        `${accLine}\n` +
+        `\n` +
+        `H local  : ${hex(H_local)}  (pHash of attacked image, before BCH correction)\n` +
+        `H recov  : ${hex(recH)}  (after BCH correction of ${bchErrors >= 0 ? bchErrors : '?'} bit drift)\n` +
+        `BCH syn  : ${recSynStr}  (49 bits, recovered from codeword)\n` +
+        `sig      : ${hex(recSig)}\n` +
+        `pk       : ${hex(recPk)}\n` +
+        `\n` +
+        `codeword (1024 bits, diff vs encoded):\n${bitsHtml}`;
+    }
 
     $('dec-results').classList.remove('is-hidden');
     setStatus('dec', `Done · ${ms.toFixed(0)} ms.`);
