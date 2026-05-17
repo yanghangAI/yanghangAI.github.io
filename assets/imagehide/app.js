@@ -52,10 +52,11 @@ function canonicalizeH(H16) {
 
 const LIBSODIUM_CDN = 'https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/+esm';
 const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-// Same 0.5 MP cap on desktop and mobile — the decoder's forward-pass
-// intermediates peak at ~60-120 MB per megapixel, and even 1 MP can OOM
-// Safari/iOS tabs; safer to be uniform than to surprise desktop Safari users.
-const MAX_INPUT_PIXELS = 0.5 * 1024 * 1024;
+// 1 MP cap on desktop and mobile — the decoder's forward-pass intermediates
+// peak at ~60-120 MB per megapixel; 1 MP fits Safari/iOS's ~300 MB tab budget
+// with the two-process encoder→decoder pipeline that releases the encoder
+// worker before decoding starts.
+const MAX_INPUT_PIXELS = 1 * 1024 * 1024;
 // Minimum shorter-dimension after fit. The ONNX models were traced at H=W=256
 // to bake the canonical pHash-adapter permutation; smaller inputs throw a
 // ScatterElements out-of-range error at inference. We upscale anything below
@@ -96,7 +97,7 @@ async function loadInfra() {
   try {
     await Promise.all([loadSodium(), loadModel()]);
     modelStatus = 'ready';
-    setGlobalBar(`ready · running on ${getBackend()} · 0.5 MP cap`, 'is-ready');
+    setGlobalBar(`ready · running on ${getBackend()} · 1 MP cap`, 'is-ready');
     setStatus('enc', 'Ready. Drop a cover image, or use the sample.');
     setStatus('dec', 'Ready. Encode something first, or upload a watermarked image.');
     refreshEncRun(); refreshDecRun();
