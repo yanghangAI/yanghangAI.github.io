@@ -7,12 +7,6 @@ const { psnr, ssim } = await import(`./metrics.js?v=${V}`);
 const { ATTACKS } = await import(`./attacks.js?v=${V}`);
 const { loadModels, encode, decode, getBackend, releaseSession } =
   await import(`./pipeline.js?v=${V}`);
-// Reed-Solomon (128,112) ECC. Wraps a 896-bit user payload into a 1024-bit
-// codeword the new INN model is trained on; recovers the 896 bits after up
-// to 8 byte-errors of channel damage.
-const { eccEncode, eccDecode, N: ECC_N, K: ECC_K } =
-  await import(`./ecc.js?v=${V}`);
-const MODEL_BITS = ECC_N * 8;        // 1024 — what the model encoder/decoder see
 
 const LIBSODIUM_CDN = 'https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/+esm';
 const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -27,8 +21,7 @@ let sodium = null, demoKeypair = null;
 let modelStatus = 'idle';
 
 let lastContainer = null;
-let lastPayloadBits = null;     // 896-bit user payload
-let lastCodewordBits = null;    // 1024-bit ECC codeword that was embedded
+let lastPayloadBits = null;
 
 const enc = { cover: null, origW: 0, origH: 0, crop: null, busy: false };
 const dec = { upload: null, busy: false };
@@ -336,11 +329,7 @@ async function runEncode() {
       };
     }
 
-    // Wrap the 896-bit user payload in a 1024-bit RS(128,112) codeword and
-    // hand THAT to the model. The model encoder/decoder are trained at
-    // 1024 bits; ECC turns the extra 128 bits into channel-error redundancy.
-    const codeword = eccEncode(bits);
-    const { container, ms } = await encode(core, codeword);
+    const { container, ms } = await encode(core, bits);
     const psnrV = psnr(container, core);
     const ssimV = ssim(container, core);
 
@@ -349,7 +338,6 @@ async function runEncode() {
 
     lastContainer = fullContainer;
     lastPayloadBits = bits;
-    lastCodewordBits = codeword;
 
     drawToCanvas($('container'), fullContainer);
     drawResidual($('residual'), core, container, 10);
@@ -362,13 +350,13 @@ async function runEncode() {
     // when the user opens both <details>.
     $('oneshot').textContent =
       `image:   ${enc.origW}×${enc.origH} → encoded region ${enc.crop.cropW}×${enc.crop.cropH}\n` +
-      `payload: ${source} (${N_BITS} user bits → ${MODEL_BITS}-bit RS(128,112) codeword)\n` +
+      `payload: ${source} (${N_BITS} bits)\n` +
       `\n` +
       `H   : ${hex(parts.H)}\n` +
       `sig : ${hex(parts.sig)}\n` +
       `pk  : ${hex(parts.pk)}\n` +
       `\n` +
-      `codeword (${MODEL_BITS} bits embedded):\n${chunkBits(codeword)}`;
+      `bits:\n${chunkBits(bits)}`;
 
     $('enc-results').classList.remove('is-hidden');
 
@@ -542,27 +530,16 @@ async function runDecode() {
     }
 
     setStatus('dec', `Decoding ${attacked.width}×${attacked.height}…`);
-    const { bits: recCodeword, ms } = await decode(attacked);   // 1024 bits
+    const { bits: recBits, ms } = await decode(attacked);
     releaseSession();
-
-    // ECC-decode the recovered codeword back to 896 user bits, fixing channel
-    // errors (up to 8 byte-errors) along the way.
-    const eccRes = eccDecode(recCodeword);
-    const recBits = eccRes.bits;                                // 896 bits
-    const eccErrors = eccRes.errors;
-    const eccOk = eccRes.ok;
 
     const { H: recH, sig: recSig, pk: recPk } = unpackPayload(recBits);
     let sigOk = false;
     try { sigOk = sodium.crypto_sign_verify_detached(recSig, recH, recPk); }
     catch (_) { sigOk = false; }
 
-    // Bit-accuracy is reported on the user payload (post-ECC). The channel-level
-    // codeword bit-acc is implicit in the ECC-corrected-byte count.
     const knownBits = (src === 'last') ? lastPayloadBits : null;
-    const knownCodeword = (src === 'last') ? lastCodewordBits : null;
     const acc = knownBits ? bitAccuracy(recBits, knownBits) : null;
-    const codewordAcc = knownCodeword ? bitAccuracy(recCodeword, knownCodeword) : null;
 
     const accEl = $('d-acc');
     if (acc != null) {
@@ -577,32 +554,15 @@ async function runDecode() {
     sigEl.textContent = sigOk ? '✓' : '✗';
     sigEl.classList.toggle('is-ok', sigOk);
     sigEl.classList.toggle('is-bad', !sigOk);
-    const eccEl = $('d-ecc');
-    if (eccEl) {
-      if (eccOk) {
-        eccEl.textContent = eccErrors === 0 ? 'clean' : `${eccErrors} / 8`;
-        eccEl.classList.toggle('is-ok', true);
-        eccEl.classList.toggle('is-bad', false);
-      } else {
-        eccEl.textContent = 'fail';
-        eccEl.classList.toggle('is-ok', false);
-        eccEl.classList.toggle('is-bad', true);
-      }
-    }
     $('d-ms').textContent = `${ms.toFixed(0)} ms`;
 
     // Same line structure as the encode card so the two codeblocks align;
     // the bits use innerHTML to wrap mismatches in <span class="b-bad"> when
     // a reference payload is known.
-    const eccTag = eccOk
-      ? (eccErrors === 0 ? 'clean' : `${eccErrors}/8 fixed`)
-      : 'uncorrectable';
     const accLine = acc != null
-      ? `payload (896b) acc: ${acc.toFixed(4)}  ·  codeword (1024b) acc: ${codewordAcc.toFixed(4)}  ·  sig: ${sigOk ? 'yes' : 'no'}  ·  ecc: ${eccTag}`
-      : `payload acc: — (no reference)  ·  sig: ${sigOk ? 'yes' : 'no'}  ·  ecc: ${eccTag}`;
-    // Diff highlight runs against the 1024-bit codeword (pre-ECC) so the user
-    // can see exactly which channel bit-flips ECC had to fix.
-    const bitsHtml = chunkBitsHTML(recCodeword, knownCodeword);
+      ? `bit acc: ${acc.toFixed(4)}  ·  sig: ${sigOk ? 'yes' : 'no'}`
+      : `bit acc: — (no reference)  ·  sig: ${sigOk ? 'yes' : 'no'}`;
+    const bitsHtml = chunkBitsHTML(recBits, knownBits);
     $('dec-output').innerHTML =
       `image:   ${original.width}×${original.height} → decoded region ${attacked.width}×${attacked.height}\n` +
       `attack:  ${attackLabel}\n` +
@@ -612,7 +572,7 @@ async function runDecode() {
       `sig : ${hex(recSig)}\n` +
       `pk  : ${hex(recPk)}\n` +
       `\n` +
-      `codeword (1024 bits, diff vs encoded):\n${bitsHtml}`;
+      `bits:\n${bitsHtml}`;
 
     $('dec-results').classList.remove('is-hidden');
     setStatus('dec', `Done · ${ms.toFixed(0)} ms.`);

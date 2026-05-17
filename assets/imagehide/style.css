@@ -326,12 +326,10 @@
   border-top: 1px solid var(--rule);
 }
 
-/* big stat row — auto-fit so 3 stats (encode) and 4 stats (decode) both look OK */
+/* big stat row */
 .ih-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-  grid-auto-columns: minmax(0, 1fr);
-  grid-auto-flow: column;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
   border: 1px solid var(--rule);
   background: #fff;
