@@ -191,9 +191,10 @@ lede: "Embed 896 invisible bits into any image, then recover them after a JPEG r
       </p>
       <p>
         <strong>Image size cap.</strong> The decoder allocates ~12 MB of float32 per
-        megapixel plus intermediates. The demo caps inputs at <strong>0.5 MP on mobile,
-        1 MP on desktop</strong> so Safari's ~300 MB tab budget holds. The model itself
-        has no such limit.
+        megapixel plus ~60–120 MB of forward-pass intermediates. The demo caps every
+        input at <strong>0.5 MP</strong> (mobile and desktop alike) so Safari's
+        ~300 MB tab budget holds with margin. The model itself has no such limit —
+        on a phone NPU or server it runs the full image.
       </p>
       <p>
         <strong>Production speed</strong> per pass (encode ≈ decode — same INN backbone):

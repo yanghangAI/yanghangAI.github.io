@@ -10,7 +10,10 @@ const { loadModels, encode, decode, getBackend, releaseSession } =
 
 const LIBSODIUM_CDN = 'https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/+esm';
 const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-const MAX_INPUT_PIXELS = IS_MOBILE ? 0.5 * 1024 * 1024 : 1 * 1024 * 1024;
+// Same 0.5 MP cap on desktop and mobile — the decoder's forward-pass
+// intermediates peak at ~60-120 MB per megapixel, and even 1 MP can OOM
+// Safari/iOS tabs; safer to be uniform than to surprise desktop Safari users.
+const MAX_INPUT_PIXELS = 0.5 * 1024 * 1024;
 
 const $ = (id) => document.getElementById(`ih-${id}`);
 
@@ -40,7 +43,7 @@ async function loadInfra() {
   try {
     await Promise.all([loadSodium(), loadModel()]);
     modelStatus = 'ready';
-    setGlobalBar(`ready · running on ${getBackend()}${IS_MOBILE ? ' (mobile cap 0.5 MP)' : ' (desktop cap 1 MP)'}`, 'is-ready');
+    setGlobalBar(`ready · running on ${getBackend()} · 0.5 MP cap`, 'is-ready');
     setStatus('enc', 'Ready. Drop a cover image, or use the sample.');
     setStatus('dec', 'Ready. Encode something first, or upload a watermarked image.');
     refreshEncRun(); refreshDecRun();
