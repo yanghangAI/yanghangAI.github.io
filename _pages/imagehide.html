@@ -157,11 +157,7 @@ lede: "Embed 896 invisible bits into any image, then recover them after a JPEG r
           </div>
           <div class="ih-stat">
             <div class="ih-stat__val" id="ih-d-ecc">—</div>
-            <div class="ih-stat__lbl">rs ecc <span class="ih-stat__note" title="Reed-Solomon RS(128, 112) over GF(2^8) corrects up to 8 byte errors anywhere in the 1024-bit codeword. 'clean' means no channel errors; 'N / 8' means ECC patched N corrupted bytes; 'fail' means more than 8 byte errors slipped through.">·&nbsp;bytes</span></div>
-          </div>
-          <div class="ih-stat">
-            <div class="ih-stat__val" id="ih-d-bch">—</div>
-            <div class="ih-stat__lbl">phash drift <span class="ih-stat__note" title="Slepian-Wolf BCH(127, 78, t=7) over GF(2^7) corrects up to 7 bits of pHash drift between the encoder's H and the receiver's locally-recomputed pHash on the attacked image. 'clean' means pHash survived intact; 'N / 7' means BCH fixed N bit-flips; 'drift>7' means the attack moved pHash too far and signature verification fails.">·&nbsp;bits</span></div>
+            <div class="ih-stat__lbl">ecc fixed <span class="ih-stat__note" title="Reed-Solomon RS(128, 112) over GF(2^8) corrects up to 8 byte errors anywhere in the 1024-bit codeword. 'clean' means no channel errors; 'N / 8 fixed' means ECC patched N corrupted bytes; 'fail' means more than 8 byte errors slipped through (codeword unrecoverable).">·&nbsp;up to 8 / 8</span></div>
           </div>
           <div class="ih-stat">
             <div class="ih-stat__val" id="ih-d-ms">—</div>
