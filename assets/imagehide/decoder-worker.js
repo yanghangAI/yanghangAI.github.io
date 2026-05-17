@@ -24,10 +24,20 @@
 let ort = null;
 let encoderSession = null;
 let decoderSession = null;
+let activeBackend = 'wasm';
 
 const ORT_VERSION = '1.20.0';
 const ORT_BASE = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
-const ORT_BUNDLE = `${ORT_BASE}ort.min.mjs`;   // WASM only — no GPU init OOM risk
+// WebGPU bundle includes the WASM provider as fallback.
+const ORT_BUNDLE = `${ORT_BASE}ort.webgpu.min.mjs`;
+
+async function detectWebGPU() {
+  if (typeof navigator === 'undefined' || !('gpu' in navigator)) return false;
+  try {
+    const adapter = await navigator.gpu.requestAdapter();
+    return !!adapter;
+  } catch { return false; }
+}
 
 function disposeTensor(t) {
   if (t && typeof t.dispose === 'function') {
@@ -69,10 +79,32 @@ async function handle(msg) {
   if (msg.type === 'init') {
     ort = await import(ORT_BUNDLE);
     if (ort.env && ort.env.wasm) ort.env.wasm.wasmPaths = ORT_BASE;
-    const opts = { executionProviders: ['wasm'] };
-    encoderSession = await ort.InferenceSession.create(new Uint8Array(msg.encoderBuf), opts);
-    decoderSession = await ort.InferenceSession.create(new Uint8Array(msg.decoderBuf), opts);
-    return { type: 'ready', transfer: [] };
+    // Try WebGPU first, fall back to WASM. Worker termination cleans up both,
+    // so the per-decode memory accumulation that previously killed the tab is
+    // no longer a constraint here.
+    const tryWebGPU = await detectWebGPU();
+    const encBytes = new Uint8Array(msg.encoderBuf);
+    const decBytes = new Uint8Array(msg.decoderBuf);
+    if (tryWebGPU) {
+      try {
+        encoderSession = await ort.InferenceSession.create(
+          encBytes, { executionProviders: ['webgpu', 'wasm'] });
+        decoderSession = await ort.InferenceSession.create(
+          decBytes, { executionProviders: ['webgpu', 'wasm'] });
+        activeBackend = 'webgpu';
+        return { type: 'ready', backend: activeBackend, transfer: [] };
+      } catch (e) {
+        // WebGPU session create failed — wipe partial state, fall through to WASM.
+        try { encoderSession?.release?.(); } catch (_) {}
+        try { decoderSession?.release?.(); } catch (_) {}
+        encoderSession = null;
+        decoderSession = null;
+      }
+    }
+    encoderSession = await ort.InferenceSession.create(encBytes, { executionProviders: ['wasm'] });
+    decoderSession = await ort.InferenceSession.create(decBytes, { executionProviders: ['wasm'] });
+    activeBackend = 'wasm';
+    return { type: 'ready', backend: activeBackend, transfer: [] };
   }
 
   if (msg.type === 'encode') {

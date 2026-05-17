@@ -75,10 +75,11 @@ async function initWorker() {
   // worker takes ownership; we keep the originals for the next batch.
   const encClone = encoderBuf.slice(0);
   const decClone = decoderBuf.slice(0);
-  await send(
+  const reply = await send(
     { type: 'init', encoderBuf: encClone, decoderBuf: decClone },
     [encClone, decClone],
   );
+  if (reply.backend) activeBackend = reply.backend;
   workerReady = true;
 }
 
