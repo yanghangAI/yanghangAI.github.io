@@ -1,13 +1,23 @@
 {
-  "updated_utc": "2026-05-17T14:42:51Z",
+  "updated_utc": "2026-05-17T14:57:53Z",
   "user": "hangyang_umass_edu",
   "squeue": [
+    {
+      "jobid": "57815968",
+      "partition": "cpu",
+      "name": "fp16-check",
+      "state": "PENDING",
+      "time": "0:00",
+      "time_limit": "10:00",
+      "nodes": "1",
+      "nodelist": "(None)"
+    },
     {
       "jobid": "57806679",
       "partition": "gpu-preempt",
       "name": "exp0-inn-idea097-d001-full",
       "state": "RUNNING",
-      "time": "11:20:31",
+      "time": "11:35:33",
       "time_limit": "1-00:00:00",
       "nodes": "1",
       "nodelist": "ials-gpu014"
@@ -17,7 +27,7 @@
       "partition": "gpu-preempt",
       "name": "exp0-inn-idea084-d001-full",
       "state": "RUNNING",
-      "time": "11:33:12",
+      "time": "11:48:14",
       "time_limit": "1-00:00:00",
       "nodes": "1",
       "nodelist": "ials-gpu009"
@@ -27,7 +37,7 @@
       "partition": "gpu-preempt",
       "name": "1024noamp_keepckpt_idea097_d001",
       "state": "RUNNING",
-      "time": "1:49:55",
+      "time": "2:04:57",
       "time_limit": "12:00:00",
       "nodes": "1",
       "nodelist": "ials-gpu014"
@@ -35,11 +45,29 @@
   ],
   "sacct_recent": [
     {
+      "jobid": "57815968",
+      "name": "fp16-check",
+      "partition": "cpu",
+      "state": "PENDING",
+      "elapsed": "00:00:00",
+      "end": "Unknown",
+      "exit_code": "0:0"
+    },
+    {
+      "jobid": "57815964",
+      "name": "fp16-att1",
+      "partition": "cpu",
+      "state": "FAILED",
+      "elapsed": "00:00:03",
+      "end": "2026-05-17T14:57:05",
+      "exit_code": "1:0"
+    },
+    {
       "jobid": "57813495",
       "name": "1024noamp_keepckpt_idea097_d001",
       "partition": "gpu-preempt",
       "state": "RUNNING",
-      "elapsed": "01:49:55",
+      "elapsed": "02:04:57",
       "end": "Unknown",
       "exit_code": "0:0"
     },
@@ -84,7 +112,7 @@
       "name": "exp0-inn-idea097-d001-full",
       "partition": "gpu-preempt",
       "state": "RUNNING",
-      "elapsed": "11:20:31",
+      "elapsed": "11:35:33",
       "end": "Unknown",
       "exit_code": "0:0"
     },
@@ -93,7 +121,7 @@
       "name": "exp0-inn-idea084-d001-full",
       "partition": "gpu-preempt",
       "state": "RUNNING",
-      "elapsed": "11:33:12",
+      "elapsed": "11:48:14",
       "end": "Unknown",
       "exit_code": "0:0"
     },
@@ -176,15 +204,6 @@
       "state": "FAILED",
       "elapsed": "00:00:14",
       "end": "2026-05-16T15:39:33",
-      "exit_code": "1:0"
-    },
-    {
-      "jobid": "57765637",
-      "name": "imagehide-export-onnx",
-      "partition": "cpu",
-      "state": "FAILED",
-      "elapsed": "00:00:31",
-      "end": "2026-05-16T14:50:05",
       "exit_code": "1:0"
     },
     {
@@ -293,15 +312,6 @@
       "state": "COMPLETED",
       "elapsed": "04:35:52",
       "end": "2026-05-16T17:10:44",
-      "exit_code": "0:0"
-    },
-    {
-      "jobid": "57755580",
-      "name": "1024noamp_idea084_design001",
-      "partition": "gpu-preempt",
-      "state": "COMPLETED",
-      "elapsed": "05:47:39",
-      "end": "2026-05-16T18:22:31",
       "exit_code": "0:0"
     }
   ],
@@ -454,33 +464,25 @@
       "partition": "cpu*",
       "avail": "up",
       "timelimit": "2-00:00:00",
-      "nodes": "3",
-      "state": "comp",
-      "cpus_aiot": "352/32/0/384"
-    },
-    {
-      "partition": "cpu*",
-      "avail": "up",
-      "timelimit": "2-00:00:00",
-      "nodes": "75",
+      "nodes": "84",
       "state": "mix",
-      "cpus_aiot": "3255/2121/0/5376"
+      "cpus_aiot": "3610/2662/0/6272"
     },
     {
       "partition": "cpu*",
       "avail": "up",
       "timelimit": "2-00:00:00",
-      "nodes": "46",
+      "nodes": "40",
       "state": "alloc",
-      "cpus_aiot": "2644/0/0/2644"
+      "cpus_aiot": "2132/0/0/2132"
     },
     {
       "partition": "cpu-preempt",
       "avail": "up",
       "timelimit": "2-00:00:00",
-      "nodes": "12",
+      "nodes": "11",
       "state": "mix-",
-      "cpus_aiot": "556/404/0/960"
+      "cpus_aiot": "484/348/0/832"
     },
     {
       "partition": "cpu-preempt",
@@ -502,17 +504,17 @@
       "partition": "cpu-preempt",
       "avail": "up",
       "timelimit": "2-00:00:00",
-      "nodes": "80",
+      "nodes": "82",
       "state": "mix",
-      "cpus_aiot": "2711/1985/0/4696"
+      "cpus_aiot": "2745/2107/0/4852"
     },
     {
       "partition": "cpu-preempt",
       "avail": "up",
       "timelimit": "2-00:00:00",
-      "nodes": "78",
+      "nodes": "77",
       "state": "alloc",
-      "cpus_aiot": "4944/0/0/4944"
+      "cpus_aiot": "4916/0/0/4916"
     },
     {
       "partition": "ece-gpu",
@@ -558,9 +560,9 @@
       "partition": "gpu",
       "avail": "up",
       "timelimit": "2-00:00:00",
-      "nodes": "5",
+      "nodes": "8",
       "state": "mix-",
-      "cpus_aiot": "180/92/0/272"
+      "cpus_aiot": "277/171/0/448"
     },
     {
       "partition": "gpu",
@@ -574,9 +576,9 @@
       "partition": "gpu",
       "avail": "up",
       "timelimit": "2-00:00:00",
-      "nodes": "71",
+      "nodes": "69",
       "state": "mix",
-      "cpus_aiot": "720/948/0/1668"
+      "cpus_aiot": "637/879/0/1516"
     },
     {
       "partition": "gpu",
@@ -590,9 +592,9 @@
       "partition": "gpu",
       "avail": "up",
       "timelimit": "2-00:00:00",
-      "nodes": "32",
+      "nodes": "31",
       "state": "idle",
-      "cpus_aiot": "0/756/0/756"
+      "cpus_aiot": "0/732/0/732"
     },
     {
       "partition": "gpu-preempt",
@@ -606,9 +608,9 @@
       "partition": "gpu-preempt",
       "avail": "up",
       "timelimit": "2-00:00:00",
-      "nodes": "11",
+      "nodes": "7",
       "state": "mix-",
-      "cpus_aiot": "318/370/0/688"
+      "cpus_aiot": "308/332/0/640"
     },
     {
       "partition": "gpu-preempt",
@@ -646,9 +648,9 @@
       "partition": "gpu-preempt",
       "avail": "up",
       "timelimit": "2-00:00:00",
-      "nodes": "44",
+      "nodes": "48",
       "state": "mix",
-      "cpus_aiot": "1100/1260/0/2360"
+      "cpus_aiot": "1106/1302/0/2408"
     },
     {
       "partition": "gpu-preempt",
@@ -662,17 +664,17 @@
       "partition": "superpod-a100",
       "avail": "up",
       "timelimit": "30-00:00:00",
-      "nodes": "3",
+      "nodes": "4",
       "state": "mix-",
-      "cpus_aiot": "170/166/0/336"
+      "cpus_aiot": "211/237/0/448"
     },
     {
       "partition": "superpod-a100",
       "avail": "up",
       "timelimit": "30-00:00:00",
-      "nodes": "9",
+      "nodes": "8",
       "state": "mix",
-      "cpus_aiot": "559/449/0/1008"
+      "cpus_aiot": "518/378/0/896"
     },
     {
       "partition": "gpupod-l40s",
@@ -686,17 +688,9 @@
       "partition": "gpupod-l40s",
       "avail": "up",
       "timelimit": "14-00:00:00",
-      "nodes": "4",
-      "state": "mix-",
-      "cpus_aiot": "44/84/0/128"
-    },
-    {
-      "partition": "gpupod-l40s",
-      "avail": "up",
-      "timelimit": "14-00:00:00",
-      "nodes": "5",
+      "nodes": "9",
       "state": "mix",
-      "cpus_aiot": "69/91/0/160"
+      "cpus_aiot": "113/175/0/288"
     },
     {
       "partition": "gpupod-l40s",
@@ -736,7 +730,7 @@
       "timelimit": "14-00:00:00",
       "nodes": "19",
       "state": "mix",
-      "cpus_aiot": "232/224/0/456"
+      "cpus_aiot": "231/225/0/456"
     },
     {
       "partition": "jdelhommelle",
@@ -942,14 +936,6 @@
       "partition": "zhoulin-cpu",
       "avail": "up",
       "timelimit": "30-00:00:00",
-      "nodes": "1",
-      "state": "mix-",
-      "cpus_aiot": "72/56/0/128"
-    },
-    {
-      "partition": "zhoulin-cpu",
-      "avail": "up",
-      "timelimit": "30-00:00:00",
       "nodes": "4",
       "state": "mix",
       "cpus_aiot": "460/52/0/512"
@@ -958,9 +944,9 @@
       "partition": "zhoulin-cpu",
       "avail": "up",
       "timelimit": "30-00:00:00",
-      "nodes": "1",
+      "nodes": "2",
       "state": "alloc",
-      "cpus_aiot": "128/0/0/128"
+      "cpus_aiot": "256/0/0/256"
     }
   ],
   "quota": [
