@@ -31,7 +31,7 @@ export function psnr(aImg, bImg) {
 }
 
 function gaussianKernel1D(size, sigma) {
-  const k = new Float64Array(size);
+  const k = new Float32Array(size);
   const half = (size - 1) / 2;
   let sum = 0;
   for (let i = 0; i < size; i++) {
@@ -45,7 +45,7 @@ function gaussianKernel1D(size, sigma) {
 
 function convolve2DSeparable(src, W, H, k1d) {
   const r = (k1d.length - 1) / 2;
-  const tmp = new Float64Array(W * H);
+  const tmp = new Float32Array(W * H);
   // Horizontal pass
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
@@ -57,7 +57,7 @@ function convolve2DSeparable(src, W, H, k1d) {
       tmp[y * W + x] = s;
     }
   }
-  const out = new Float64Array(W * H);
+  const out = new Float32Array(W * H);
   // Vertical pass
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
@@ -74,7 +74,7 @@ function convolve2DSeparable(src, W, H, k1d) {
 
 function extractChannel(img, c) {
   const { data, width: W, height: H } = img;
-  const out = new Float64Array(W * H);
+  const out = new Float32Array(W * H);
   for (let i = 0; i < W * H; i++) out[i] = data[i * 4 + c];
   return out;
 }
@@ -83,9 +83,9 @@ function ssimChannel(a, b, W, H, kernel) {
   // Per-channel SSIM map mean.
   const muA = convolve2DSeparable(a, W, H, kernel);
   const muB = convolve2DSeparable(b, W, H, kernel);
-  const a2 = new Float64Array(W * H);
-  const b2 = new Float64Array(W * H);
-  const ab = new Float64Array(W * H);
+  const a2 = new Float32Array(W * H);
+  const b2 = new Float32Array(W * H);
+  const ab = new Float32Array(W * H);
   for (let i = 0; i < a.length; i++) {
     a2[i] = a[i] * a[i];
     b2[i] = b[i] * b[i];
@@ -109,15 +109,45 @@ function ssimChannel(a, b, W, H, kernel) {
   return sum / N;
 }
 
+// Above this many pixels, SSIM downsamples (nearest-neighbor) before computing
+// so the convolution temporaries don't blow up mobile browser memory. 512×512
+// is enough resolution for SSIM to be representative; full-res adds ~10× cost
+// for ~0.001 of metric change.
+const SSIM_MAX_PIXELS = 512 * 512;
+
+function downsampleImageData(img, maxPixels) {
+  const { width: W, height: H } = img;
+  if (W * H <= maxPixels) return img;
+  const scale = Math.sqrt(maxPixels / (W * H));
+  const w = Math.max(11, Math.round(W * scale));
+  const h = Math.max(11, Math.round(H * scale));
+  const out = new Uint8ClampedArray(w * h * 4);
+  for (let y = 0; y < h; y++) {
+    const sy = Math.min(H - 1, Math.floor(y * H / h));
+    for (let x = 0; x < w; x++) {
+      const sx = Math.min(W - 1, Math.floor(x * W / w));
+      const si = (sy * W + sx) * 4;
+      const di = (y * w + x) * 4;
+      out[di]     = img.data[si];
+      out[di + 1] = img.data[si + 1];
+      out[di + 2] = img.data[si + 2];
+      out[di + 3] = 255;
+    }
+  }
+  return { data: out, width: w, height: h };
+}
+
 export function ssim(aImg, bImg) {
   if (aImg.width !== bImg.width || aImg.height !== bImg.height) {
     throw new Error('SSIM: dimension mismatch');
   }
-  const W = aImg.width, H = aImg.height;
+  const a = downsampleImageData(aImg, SSIM_MAX_PIXELS);
+  const b = downsampleImageData(bImg, SSIM_MAX_PIXELS);
+  const W = a.width, H = a.height;
   const kernel = gaussianKernel1D(11, 1.5);
   let acc = 0;
   for (let c = 0; c < 3; c++) {
-    acc += ssimChannel(extractChannel(aImg, c), extractChannel(bImg, c),
+    acc += ssimChannel(extractChannel(a, c), extractChannel(b, c),
                        W, H, kernel);
   }
   return acc / 3;
