@@ -12,7 +12,7 @@ const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 // Auto-downsample input above this. Mobile is tighter because WASM-only
 // inference is single-threaded and decode time scales ~linearly with pixels —
 // and the browser's per-tab memory budget is much smaller.
-const MAX_INPUT_PIXELS = IS_MOBILE ? 1 * 1024 * 1024 : 2 * 1024 * 1024;
+const MAX_INPUT_PIXELS = IS_MOBILE ? 0.5 * 1024 * 1024 : 1 * 1024 * 1024;
 // Attacks pre-checked on first load. Mobile defaults to a smaller representative
 // set so the first run completes in tens of seconds, not minutes.
 const DEFAULT_CHECKED = IS_MOBILE
