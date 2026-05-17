@@ -75,6 +75,24 @@
   margin: 0.5rem 0 1rem;
 }
 
+.imagehide__perf-note {
+  font-size: 0.95rem;
+  color: #444;
+  line-height: 1.5;
+  max-width: 68ch;
+  margin: 0.5rem 0 0.6rem;
+}
+.imagehide__perf-note + ul.imagehide__perf-note {
+  margin-top: 0;
+  padding-left: 1.3rem;
+}
+.imagehide__perf-note li {
+  margin: 0.15rem 0;
+}
+.imagehide__perf-note strong {
+  color: #111;
+}
+
 .imagehide__controls {
   display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; align-items: center;
   margin: 0.8rem 0;

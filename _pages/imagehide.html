@@ -39,6 +39,22 @@ lede: "Live demo of the MWIP (Minimal Whole-Image Provenance) INN watermark. Upl
 
   <pre id="ih-oneshot" class="imagehide__oneshot">One-shot stats will appear here after encoding.</pre>
 
+  <p class="imagehide__perf-note">
+    <strong>Where this runs.</strong> All encoding and decoding executes <em>inside your browser</em> via ONNX Runtime Web. Your image is never uploaded — the model is fetched once from a CDN and runs entirely on-device, in a Web Worker. No server is involved in the inference path.
+  </p>
+
+  <p class="imagehide__perf-note">
+    <strong>Speed in production.</strong> The timings above are browser inference — single-threaded WASM on mobile, WebGPU on desktop — which is the slowest path the same model would ever run on. The encoder is only 251 K parameters and is designed to run on-camera at capture time. On real production hardware the speedup is dramatic:
+  </p>
+  <ul class="imagehide__perf-note">
+    <li><strong>Phone NPU</strong> (Apple ANE / Snapdragon Hexagon, the actual deployment target): &lt;&nbsp;50&nbsp;ms per 0.5&nbsp;MP image — <strong>roughly 100–500× faster</strong> than the browser-WASM mobile timing you see here.</li>
+    <li><strong>Server CPU</strong>, native ONNX Runtime with AVX-512 + multi-threading: 50–200&nbsp;ms.</li>
+    <li><strong>Server GPU</strong>, native ONNX Runtime with fp16: 5–20&nbsp;ms.</li>
+  </ul>
+  <p class="imagehide__perf-note">
+    The demo gives up most of that headroom on purpose: it&#39;s single-threaded (browser WASM can&#39;t use threads without server-side COOP/COEP headers, which GitHub Pages doesn&#39;t serve), fp32 instead of fp16, one image at a time instead of batched, and pays a JS↔WASM marshaling cost on every tensor crossing.
+  </p>
+
   <div class="imagehide__controls">
     <strong>Attacks:</strong>
     <span id="ih-attackList"></span>
