@@ -3,7 +3,10 @@
 const V = (typeof window !== 'undefined' && window.__imagehideVersion) || 'dev';
 const { computeCrop, splitTrim, pasteBack } = await import(`./trim.js?v=${V}`);
 const { phash128, packPayload, unpackPayload, bitAccuracy, N_H } = await import(`./payload.js?v=${V}`);
-const { psnr, ssim } = await import(`./metrics.js?v=${V}`);
+// PSNR/SSIM intentionally dropped: computing them requires keeping the cover
+// core resident AND attacking it, which doubled the per-attack peak. Bit
+// accuracy + signature verification are the meaningful "did it survive?"
+// signals; the metrics.js module is no longer imported here.
 const { ATTACKS } = await import(`./attacks.js?v=${V}`);
 const { loadModels, encode, decode, getBackend, releaseSession } = await import(`./pipeline.js?v=${V}`);
 
@@ -74,8 +77,7 @@ function renderAttackList() {
   ).join('');
   els.resultsBody.innerHTML = ATTACKS.map(a =>
     `<tr id="row-${a.id}" class="queued">
-       <td>${a.label}</td><td class="num">—</td><td class="num">—</td>
-       <td class="num">—</td><td>—</td>
+       <td>${a.label}</td><td class="num">—</td><td>—</td>
      </tr>`).join('');
 }
 
@@ -239,14 +241,17 @@ async function runEncode() {
   drawToCanvas(els.container, fullContainer);
   drawResidual(els.residual, core, container, 10);
 
-  // Capture original dimensions for the oneshot line, then drop the full-size
-  // buffers — attacks only need (capped, ≤1024²) coreCover/coreContainer from
-  // here on, which is critical for mobile memory budgets.
+  // Capture original dimensions for the oneshot line, then drop every full-size
+  // buffer AND the cover core. Attacks now only need coreContainer — bit
+  // recovery + signature verification don't depend on the cover. This shaves
+  // another ~2 MB resident and avoids attacking the cover (which doubled the
+  // Canvas/Bitmap transient peak).
   state.origW = state.originalImage.width;
   state.origH = state.originalImage.height;
   state.fullContainer = null;
   state.fullCover = null;
   state.originalImage = null;
+  state.coreCover = null;
 
   // Single decode time-probe on the clean container.
   const dec = await decode(container);
@@ -320,22 +325,14 @@ async function runAttacks() {
       // Attacks run on the (already-cropped, capped-size) core, not the full
       // original — saves an order of magnitude of memory on phone-sized inputs.
       const aContCore = await a.fn(state.coreContainer);
-      let aCovCore    = await a.fn(state.coreCover);
-      const p = psnr(aContCore, aCovCore);
-      const s = ssim(aContCore, aCovCore);
-      // Drop the attacked-cover working buffer before the decoder allocates
-      // its ~6 MB Float32 tensor + intermediates — keeps the decode peak lower.
-      aCovCore = null;
       const { bits: recBits } = await decode(aContCore);
       const acc = bitAccuracy(recBits, state.payloadBits);
       const { H: recH, sig: recSig } = unpackPayload(recBits);
       const sigOk = sodium.crypto_sign_verify_detached(recSig, recH, demoKeypair.publicKey);
       const tds = row.querySelectorAll('td');
-      tds[1].textContent = isFinite(p) ? `${p.toFixed(1)} dB` : '∞ dB';
-      tds[2].textContent = s.toFixed(3);
-      tds[3].textContent = acc.toFixed(3);
-      tds[4].textContent = sigOk ? '✓' : '✗';
-      tds[4].classList.add(sigOk ? 'sig-ok' : 'sig-no');
+      tds[1].textContent = acc.toFixed(3);
+      tds[2].textContent = sigOk ? '✓' : '✗';
+      tds[2].classList.add(sigOk ? 'sig-ok' : 'sig-no');
     } catch (e) {
       const tds = row.querySelectorAll('td');
       tds[1].textContent = 'err';
