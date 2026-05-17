@@ -156,6 +156,10 @@ lede: "Embed 896 invisible bits into any image, then recover them after a JPEG r
             <div class="ih-stat__lbl">signature</div>
           </div>
           <div class="ih-stat">
+            <div class="ih-stat__val" id="ih-d-ecc">—</div>
+            <div class="ih-stat__lbl">ecc fixed <span class="ih-stat__note" title="Reed-Solomon RS(128, 112) over GF(2^8) corrects up to 8 byte errors anywhere in the 1024-bit codeword. 'clean' means no channel errors; 'N / 8 fixed' means ECC patched N corrupted bytes; 'fail' means more than 8 byte errors slipped through (codeword unrecoverable).">·&nbsp;up to 8 / 8</span></div>
+          </div>
+          <div class="ih-stat">
             <div class="ih-stat__val" id="ih-d-ms">—</div>
             <div class="ih-stat__lbl">decode time <span class="ih-stat__note" title="Browser WASM is single-threaded with no SIMD model-quantization; a phone NPU runs this same model ~100–500× faster, a server GPU another ~10× on top.">·&nbsp;100–500× in prod</span></div>
           </div>
@@ -175,9 +179,13 @@ lede: "Embed 896 invisible bits into any image, then recover them after a JPEG r
     <div class="ih-about__body">
       <p>
         <strong>What it is.</strong> Live demo of the MWIP watermark — an invertible
-        neural network embeds an 896-bit payload (<code>H</code> = 128-bit perceptual hash,
-        <code>sig</code> = 512-bit Ed25519, <code>pk</code> = 256-bit public key) into an
-        image, and a sibling network recovers it after channel distortion.
+        neural network embeds a payload (<code>H</code> = 128-bit perceptual hash,
+        <code>sig</code> = 512-bit Ed25519, <code>pk</code> = 256-bit public key — 896 bits)
+        into an image, and a sibling network recovers it after channel distortion.
+        The 896-bit payload is wrapped in a Reed-Solomon RS(128, 112) codeword for
+        the model interface — 1024 bits in, 1024 out, with 128 parity bits letting
+        the decoder correct up to <strong>8 byte errors</strong> of channel damage
+        before unpacking the original 896 bits.
       </p>
       <p>
         <strong>Demo caveat.</strong> The keypair ships in this page; anyone can forge a
