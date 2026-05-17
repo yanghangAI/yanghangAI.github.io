@@ -66,11 +66,8 @@ let sodium = null, demoKeypair = null;
 let modelStatus = 'idle';
 
 let lastContainer = null;
-let lastPayloadBits = null;     // 896-bit wire payload (syndrome|sig|pk|pad)
-let lastCodewordBits = null;    // 1024-bit RS codeword
-let lastH = null;                // canonical 16-byte H (LSB cleared)
-let lastSyndrome = null;         // 49 BCH syndrome bits
-let lastLogicalParts = null;     // { H, sig, pk } for display + bit-acc
+let lastPayloadBits = null;     // 896-bit user payload
+let lastCodewordBits = null;    // 1024-bit ECC codeword that was embedded
 
 const enc = { cover: null, origW: 0, origH: 0, crop: null, busy: false };
 const dec = { upload: null, busy: false };
@@ -361,35 +358,27 @@ async function runEncode() {
     const source = document.querySelector('input[name="ih-bits-source"]:checked').value;
     const { core, strips } = splitTrim(enc.cover, enc.crop);
 
-    // Build the logical (H, sig, pk) triple. H is canonicalized (bit 127 = 0)
-    // so encoder and decoder agree on the BCH input.
-    let H, sig, pk;
+    let bits, parts;
     if (source === 'auto') {
-      H = canonicalizeH(phash128(core));
-      sig = sodium.crypto_sign_detached(H, demoKeypair.privateKey);
-      pk = demoKeypair.publicKey;
+      const H_bytes = phash128(core);
+      const sig = sodium.crypto_sign_detached(H_bytes, demoKeypair.privateKey);
+      const pk = demoKeypair.publicKey;
+      bits = packPayload(H_bytes, sig, pk);
+      parts = { H: H_bytes, sig, pk };
     } else {
-      // Custom: user's 896 bits split as H|sig|pk. Demo limitation — for
-      // Slepian-Wolf to recover H, the H field must equal pHash(cover) within
-      // 7 bits of drift, which arbitrary user bytes typically don't satisfy.
-      const userBytes = bitsToBytes(parseCustomBits($('enc-customBits').value));
-      H   = canonicalizeH(userBytes.slice(0, N_H / 8));
-      sig = userBytes.slice(N_H / 8, (N_H + N_SIG) / 8);
-      pk  = userBytes.slice((N_H + N_SIG) / 8);
+      bits = parseCustomBits($('enc-customBits').value);
+      const bytes = bitsToBytes(bits);
+      parts = {
+        H:   bytes.slice(0, N_H / 8),
+        sig: bytes.slice(N_H / 8, (N_H + N_SIG) / 8),
+        pk:  bytes.slice((N_H + N_SIG) / 8),
+      };
     }
-    const parts = { H, sig, pk };
 
-    // Slepian-Wolf: transmit only the BCH(127, 78, t=7) syndrome of H (49 bits)
-    // instead of H itself (128 bits). Receiver recomputes pHash on the attacked
-    // image and uses the syndrome to recover H exactly, correcting up to 7 bit
-    // flips of pHash drift.
-    const H_bits128 = bytesToBits(H);
-    const syndrome = bchEncodeSyndrome(H_bits128.slice(0, 127));
-
-    // Pack into the 896-bit wire (syndrome + sig + pk + zero pad) and RS-encode
-    // to the 1024-bit codeword the model sees.
-    const wireBits = packWirePayload(syndrome, sig, pk);
-    const codeword = eccEncode(wireBits);
+    // Wrap the 896-bit user payload in a 1024-bit RS(128,112) codeword and
+    // hand THAT to the model. The model encoder/decoder are trained at
+    // 1024 bits; ECC turns the extra 128 bits into channel-error redundancy.
+    const codeword = eccEncode(bits);
     const { container, ms } = await encode(core, codeword);
     const psnrV = psnr(container, core);
     const ssimV = ssim(container, core);
@@ -398,11 +387,8 @@ async function runEncode() {
                                     enc.cover.width, enc.cover.height);
 
     lastContainer = fullContainer;
-    lastPayloadBits = wireBits;     // 896-bit wire (syndrome|sig|pk|pad)
-    lastCodewordBits = codeword;    // 1024-bit RS codeword
-    lastH = H;                       // canonical 16-byte H
-    lastSyndrome = syndrome;         // 49 bits — for decode-side diff
-    lastLogicalParts = parts;        // { H, sig, pk } for bit-acc / display
+    lastPayloadBits = bits;
+    lastCodewordBits = codeword;
 
     drawToCanvas($('container'), fullContainer);
     drawResidual($('residual'), core, container, 10);
@@ -413,19 +399,13 @@ async function runEncode() {
 
     // Format matches the decode card line-for-line so the two codeblocks line up
     // when the user opens both <details>.
-    const synStr = (() => {
-      const g = [];
-      for (let i = 0; i < 7; i++) g.push(Array.from(syndrome.slice(i * 7, (i + 1) * 7)).join(''));
-      return g.join(' ');
-    })();
     $('oneshot').textContent =
-      `image:    ${enc.origW}×${enc.origH} → encoded region ${enc.crop.cropW}×${enc.crop.cropH}\n` +
-      `payload:  ${source}  (Slepian-Wolf: 49b BCH syndrome + 512b sig + 256b pk = 817 wire bits, padded to 896, RS→${MODEL_BITS}b codeword)\n` +
+      `image:   ${enc.origW}×${enc.origH} → encoded region ${enc.crop.cropW}×${enc.crop.cropH}\n` +
+      `payload: ${source} (${N_BITS} user bits → ${MODEL_BITS}-bit RS(128,112) codeword)\n` +
       `\n` +
-      `H        : ${hex(parts.H)}  (128 bits, recomputable from image)\n` +
-      `BCH syn  : ${synStr}  (49 bits, embedded in place of H)\n` +
-      `sig      : ${hex(parts.sig)}\n` +
-      `pk       : ${hex(parts.pk)}\n` +
+      `H   : ${hex(parts.H)}\n` +
+      `sig : ${hex(parts.sig)}\n` +
+      `pk  : ${hex(parts.pk)}\n` +
       `\n` +
       `codeword (${MODEL_BITS} bits embedded):\n${chunkBits(codeword)}`;
 
