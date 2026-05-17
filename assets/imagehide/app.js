@@ -677,6 +677,24 @@ async function runDecode() {
     sigEl.classList.toggle('is-ok', sigOk);
     sigEl.classList.toggle('is-bad', !sigOk);
 
+    // When a reference is known (decoding our own last container), compute the
+    // ACTUAL byte- and bit-error counts so the stat tiles can show real numbers
+    // even when ECC/BCH give up. Without a reference we can't know.
+    let trueByteErrors = null;
+    if (knownCodeword) {
+      const recBytes = bitsToBytes(recCodeword);
+      const knownBytes = bitsToBytes(knownCodeword);
+      trueByteErrors = 0;
+      for (let i = 0; i < recBytes.length; i++) if (recBytes[i] !== knownBytes[i]) trueByteErrors++;
+    }
+    let truePhashDrift = null;
+    if (lastH) {
+      const knownBits = bytesToBits(lastH).slice(0, 127);
+      const localBits = bytesToBits(H_local).slice(0, 127);
+      truePhashDrift = 0;
+      for (let i = 0; i < 127; i++) if (knownBits[i] !== localBits[i]) truePhashDrift++;
+    }
+
     const eccEl = $('d-ecc');
     if (eccEl) {
       if (eccOk) {
@@ -684,7 +702,9 @@ async function runDecode() {
         eccEl.classList.toggle('is-ok', true);
         eccEl.classList.toggle('is-bad', false);
       } else {
-        eccEl.textContent = 'fail';
+        // RS gave up — show the actual byte-error count if we know the reference,
+        // otherwise just "fail" (uploaded image with no known original).
+        eccEl.textContent = trueByteErrors != null ? `${trueByteErrors} / ${T_BYTES} (fail)` : 'fail';
         eccEl.classList.toggle('is-ok', false);
         eccEl.classList.toggle('is-bad', true);
       }
@@ -696,15 +716,20 @@ async function runDecode() {
         bchEl.classList.toggle('is-ok', true);
         bchEl.classList.toggle('is-bad', false);
       } else {
-        bchEl.textContent = 'drift>7';
+        // BCH gave up — show actual pHash drift bits if we know the reference H.
+        bchEl.textContent = truePhashDrift != null ? `${truePhashDrift} / ${BCH_T} (fail)` : 'drift>7';
         bchEl.classList.toggle('is-ok', false);
         bchEl.classList.toggle('is-bad', true);
       }
     }
     $('d-ms').textContent = `${ms.toFixed(0)} ms`;
 
-    const eccTag = eccOk ? (eccErrors === 0 ? 'clean' : `${eccErrors}/${T_BYTES} fixed`) : 'uncorrectable';
-    const bchTag = bchOk ? (bchErrors === 0 ? 'clean' : `${bchErrors}/${BCH_T} fixed`)   : 'drift>7';
+    const eccTag = eccOk
+      ? (eccErrors === 0 ? 'clean' : `${eccErrors}/${T_BYTES} fixed`)
+      : (trueByteErrors != null ? `${trueByteErrors} byte errors (need ≤${T_BYTES})` : 'uncorrectable');
+    const bchTag = bchOk
+      ? (bchErrors === 0 ? 'clean' : `${bchErrors}/${BCH_T} fixed`)
+      : (truePhashDrift != null ? `${truePhashDrift} bit drift (need ≤${BCH_T})` : 'drift>7');
     const accLine = acc != null
       ? `logical (H|sig|pk, 896b) acc: ${acc.toFixed(4)}  ·  wire (817b) acc: ${wireAcc.toFixed(4)}  ·  codeword (1024b) acc: ${codewordAcc.toFixed(4)}\nsig: ${sigOk ? 'yes' : 'no'}  ·  RS ecc: ${eccTag}  ·  BCH pHash: ${bchTag}`
       : `acc: — (no reference)  ·  sig: ${sigOk ? 'yes' : 'no'}  ·  RS ecc: ${eccTag}  ·  BCH pHash: ${bchTag}`;
