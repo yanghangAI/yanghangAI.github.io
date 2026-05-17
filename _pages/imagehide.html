@@ -9,6 +9,7 @@ lede: "Embed 896 invisible bits into any image, then recover them after a JPEG r
 
 <div id="ih-globalbar" class="ih-globalbar">
   <span id="ih-globalbar-text">loading model…</span>
+  <span id="ih-globalbar-version" class="ih-globalbar__version" title="Jekyll site.time at build"></span>
 </div>
 
 <section class="ih">
@@ -246,6 +247,14 @@ lede: "Embed 896 invisible bits into any image, then recover them after a JPEG r
   window.__imagehideVersion = v;
   const bar = document.getElementById('ih-globalbar-text');
   if (bar) bar.textContent = `bootstrap v${v} starting…`;
+  const verEl = document.getElementById('ih-globalbar-version');
+  if (verEl) {
+    const d = new Date(parseInt(v, 10) * 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    verEl.textContent =
+      `build ${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ` +
+      `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC · v${v}`;
+  }
   console.log('[imagehide] bootstrap starting, version', v);
 
   // 30s watchdog: if app.js hasn't completed initialization (and replaced
