@@ -135,6 +135,47 @@ function hex(u8) {
   return Array.from(u8, b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Format an 896-bit payload as a fixed grid: 14 lines of 64 bits, grouped in
+// octets separated by single spaces. Identical structure in both cards makes
+// the bit positions land at the same column / line on both sides.
+function chunkBits(bits) {
+  const arr = Array.from(bits);
+  const lines = [];
+  for (let i = 0; i < arr.length; i += 64) {
+    const groups = [];
+    for (let j = i; j < Math.min(i + 64, arr.length); j += 8) {
+      groups.push(arr.slice(j, j + 8).join(''));
+    }
+    lines.push(groups.join(' '));
+  }
+  return lines.join('\n');
+}
+
+// Same layout as chunkBits, but each bit becomes a <span> when it disagrees
+// with the known reference. Used in the decode card when we know the original
+// payload (i.e. when src='last container').
+function chunkBitsHTML(bits, known) {
+  const arr = Array.from(bits);
+  const ref = known ? Array.from(known) : null;
+  const lines = [];
+  for (let i = 0; i < arr.length; i += 64) {
+    const groups = [];
+    for (let j = i; j < Math.min(i + 64, arr.length); j += 8) {
+      const grp = [];
+      for (let k = j; k < Math.min(j + 8, arr.length); k++) {
+        if (ref && arr[k] !== ref[k]) {
+          grp.push(`<span class="b-bad">${arr[k]}</span>`);
+        } else {
+          grp.push(String(arr[k]));
+        }
+      }
+      groups.push(grp.join(''));
+    }
+    lines.push(groups.join(' '));
+  }
+  return lines.join('\n');
+}
+
 function parseCustomBits(text) {
   const t = text.trim().replace(/\s+/g, '');
   if (!t) throw new Error('paste some bits first');
@@ -279,13 +320,17 @@ async function runEncode() {
     $('m-ssim').textContent = ssimV.toFixed(4);
     $('m-ms').textContent = `${ms.toFixed(0)} ms`;
 
+    // Format matches the decode card line-for-line so the two codeblocks line up
+    // when the user opens both <details>.
     $('oneshot').textContent =
       `image:   ${enc.origW}×${enc.origH} → encoded region ${enc.crop.cropW}×${enc.crop.cropH}\n` +
-      `payload: ${source} (${N_BITS} bits)\n\n` +
+      `payload: ${source} (${N_BITS} bits)\n` +
+      `\n` +
       `H   : ${hex(parts.H)}\n` +
       `sig : ${hex(parts.sig)}\n` +
-      `pk  : ${hex(parts.pk)}\n\n` +
-      `bits: ${Array.from(bits).join('')}`;
+      `pk  : ${hex(parts.pk)}\n` +
+      `\n` +
+      `bits:\n${chunkBits(bits)}`;
 
     $('enc-results').classList.remove('is-hidden');
 
@@ -485,16 +530,23 @@ async function runDecode() {
     sigEl.classList.toggle('is-bad', !sigOk);
     $('d-ms').textContent = `${ms.toFixed(0)} ms`;
 
-    $('dec-output').textContent =
-      `image:    ${original.width}×${original.height} → decoded region ${attacked.width}×${attacked.height}\n` +
-      `attack:   ${attackLabel}\n\n` +
-      `recovered\n` +
-      `  H   : ${hex(recH)}\n` +
-      `  sig : ${hex(recSig)}\n` +
-      `  pk  : ${hex(recPk)}\n\n` +
-      `bit accuracy vs known: ${acc != null ? acc.toFixed(4) : '— (no reference)'}\n` +
-      `signature verifies   : ${sigOk ? 'yes' : 'no'}\n\n` +
-      `bits: ${Array.from(recBits).join('')}`;
+    // Same line structure as the encode card so the two codeblocks align;
+    // the bits use innerHTML to wrap mismatches in <span class="b-bad"> when
+    // a reference payload is known.
+    const accLine = acc != null
+      ? `bit acc: ${acc.toFixed(4)}  ·  sig: ${sigOk ? 'yes' : 'no'}`
+      : `bit acc: — (no reference)  ·  sig: ${sigOk ? 'yes' : 'no'}`;
+    const bitsHtml = chunkBitsHTML(recBits, knownBits);
+    $('dec-output').innerHTML =
+      `image:   ${original.width}×${original.height} → decoded region ${attacked.width}×${attacked.height}\n` +
+      `attack:  ${attackLabel}\n` +
+      `${accLine}\n` +
+      `\n` +
+      `H   : ${hex(recH)}\n` +
+      `sig : ${hex(recSig)}\n` +
+      `pk  : ${hex(recPk)}\n` +
+      `\n` +
+      `bits:\n${bitsHtml}`;
 
     $('dec-results').classList.remove('is-hidden');
     setStatus('dec', `Done · ${ms.toFixed(0)} ms.`);

@@ -65,9 +65,13 @@
   gap: 1.5rem;
   align-items: stretch;
 }
-/* No flex on the column — let content sit at the top; align-items: stretch on
-   the grid makes both cards the same height by extending the shorter one's
-   background, which is what the user actually wants. */
+/* Stretch each card to a column flex so the bits dump (always the last
+   element in the card) sits at the bottom of the card. With both cards at
+   the same height (align-items: stretch), the bit codeblocks end up at the
+   same Y position — easy side-by-side comparison. */
+.ih-col { display: flex; flex-direction: column; }
+.ih-col > .ih-results { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.ih-col > .ih-results > .ih-details { margin-top: auto; }
 @media (max-width: 880px) {
   .ih-grid { grid-template-columns: 1fr; gap: 1.8rem; }
 }
@@ -419,13 +423,19 @@
   padding: 0.7rem 0.9rem;
   border-left: 2px solid var(--accent);
   margin: 0.4rem 0 0;
-  white-space: pre-wrap;
-  word-break: break-all;
-  overflow-wrap: anywhere;
-  max-height: 16rem;
+  white-space: pre;          /* preserve exact column layout for bit alignment */
+  overflow-x: auto;          /* horizontal scroll if a line is wider than card */
+  max-height: 22rem;
   overflow-y: auto;
   line-height: 1.55;
   color: var(--ink-soft);
+}
+/* A single mismatched bit in the decode block: red-on-tinted background so it
+   pops at a glance, no need to compare character-by-character. */
+.ih-codeblock .b-bad {
+  color: var(--bad);
+  background: rgba(168, 32, 26, 0.16);
+  font-weight: 700;
 }
 
 /* === handoff highlight when "Send to decode" is clicked === */
