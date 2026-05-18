@@ -69,8 +69,18 @@ async function _refreshSession() {
 
 const ORT_VERSION = '1.20.0';
 const ORT_BASE = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
-// WebGPU bundle includes the WASM provider as fallback.
-const ORT_BUNDLE = `${ORT_BASE}ort.webgpu.min.mjs`;
+// On iOS load the WASM-only ORT bundle so we never even pull in the WebGPU
+// code path. The webgpu bundle can touch GPU APIs at import time (adapter
+// probe, shader-compiler init) even when we never call WebGPU — on iPhone
+// that's enough to commit GPU memory that's never freed. Pure WASM bundle
+// avoids all of it.
+function _isIOSUA() {
+  const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+  return /iPhone|iPad|iPod/i.test(ua);
+}
+const ORT_BUNDLE = _isIOSUA()
+  ? `${ORT_BASE}ort.min.mjs`         // WASM-only, smaller, no WebGPU touch
+  : `${ORT_BASE}ort.webgpu.min.mjs`; // WebGPU + WASM fallback
 
 // Mirror worker diagnostics to the main thread so they show in the
 // page's devtools console even when the worker context is hidden
@@ -86,21 +96,13 @@ function diag(msg) {
   try { self.postMessage({ id: 0, type: 'diag', message: `${_DIAG_TAG} ${msg}` }); } catch (_) {}
 }
 
-function isIOS() {
-  // iPhone/iPad/iPod (all WebKit). iOS Safari exposes navigator.gpu but
-  // WebGPU on iOS can't fit our model in the per-tab pool (~100 MB),
-  // and the leftover GPU state across reloads makes failures intermittent.
-  // WASM is slower but predictable. macOS Safari WebGPU works fine.
-  const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
-  return /iPhone|iPad|iPod/i.test(ua);
-}
+// Alias to the module-level UA check so old callers in this file still work.
+function isIOS() { return _isIOSUA(); }
 
 async function detectWebGPU() {
+  // iOS goes straight to WASM — no detection, no GPU touch.
+  if (isIOS()) return false;
   if (typeof navigator === 'undefined' || !('gpu' in navigator)) return false;
-  if (isIOS()) {
-    diag('WebGPU available but skipped on iOS — using WASM instead');
-    return false;
-  }
   try {
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
