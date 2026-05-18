@@ -54,6 +54,7 @@ function canonicalizeH(H16) {
 
 const LIBSODIUM_CDN = 'https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/+esm';
 const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 // Desktop 1 MP, mobile 0.25 MP. iPhone Safari's per-tab WebGPU budget is
 // ~100 MB and one encode/decode peak alone (input+output+perm+8 INN block
 // activations) is ~55-85 MB at 0.5 MP, leaving no headroom for the next
@@ -122,11 +123,18 @@ async function loadInfra() {
     await Promise.all([loadSodium(), loadModel()]);
     modelStatus = 'ready';
     // On mobile the worker isn't spawned until first encode/decode, so
-    // getBackend() doesn't know the real EP yet. Show a placeholder and
-    // refreshBackendStatus() will update it after the first session inits.
-    setGlobalBar(IS_MOBILE
-      ? `ready · backend on first run · ${MAX_INPUT_MP_LABEL} cap`
-      : `ready · running on ${getBackend()} · ${MAX_INPUT_MP_LABEL} cap`,
+    // getBackend() doesn't know the actual EP yet. Two cases:
+    //   - iOS: we statically force WASM (no WebGPU bundle even loaded), so
+    //     we can show 'wasm' immediately.
+    //   - Android: WebGPU is still attempted; show a placeholder until the
+    //     first session init reports back.
+    let initialBackend;
+    if (IS_IOS) initialBackend = 'wasm';
+    else if (IS_MOBILE) initialBackend = null;  // unknown, will update after first run
+    else initialBackend = getBackend();          // desktop: eager init already happened
+    setGlobalBar(initialBackend
+      ? `ready · running on ${initialBackend} · ${MAX_INPUT_MP_LABEL} cap`
+      : `ready · backend on first run · ${MAX_INPUT_MP_LABEL} cap`,
       'is-ready');
     setStatus('enc', 'Ready. Drop a cover image, or use the sample.');
     setStatus('dec', 'Ready. Encode something first, or upload a watermarked image.');
