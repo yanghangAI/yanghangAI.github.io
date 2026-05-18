@@ -25,6 +25,11 @@ let workerMode = null;        // null | 'encoder' | 'decoder'
 let encoderBuf = null;
 let decoderBuf = null;
 let activeBackend = 'wasm';   // worker uses WASM; reported to UI for honesty
+// Once a WebGPU session creation has failed in this page-session, remember it
+// and skip the WebGPU attempt on every subsequent worker spawn. Otherwise on
+// mobile we pay the WebGPU init cost (and risk GPU-mem fragmentation that
+// OOMs the WASM fallback) on every mode switch.
+let _webgpuKnownBad = false;
 let nextMsgId = 1;
 const pending = new Map();
 
@@ -96,8 +101,13 @@ async function _spawnAndInit(mode, opts) {
   ensureWorker();
   const buf = mode === 'encoder' ? encoderBuf : decoderBuf;
   const clone = buf.slice(0);
+  // If WebGPU has already failed once this session, don't even attempt it
+  // again — the repeated GPU-mem allocate/release thrash is what's been
+  // OOMing iPhone Safari on the decode side.
+  const initOpts = { ...(opts || {}) };
+  if (_webgpuKnownBad) initOpts.forceWasm = true;
   const reply = await send(
-    { type: 'init', mode, modelBuf: clone, ...(opts || {}) },
+    { type: 'init', mode, modelBuf: clone, ...initOpts },
     [clone],
   );
   if (reply.backend) activeBackend = reply.backend;
@@ -117,8 +127,9 @@ async function ensureMode(mode) {
     // worker, so respawning the worker and retrying with WebGPU disabled
     // gives us a clean ORT instance with no poisoned cache.
     const m = e && e.message ? e.message : '';
-    if (/initWasm|no available backend|previous call/i.test(m)) {
-      console.warn('[imagehide] worker init failed, respawning WASM-only:', m);
+    if (/initWasm|no available backend|previous call|Out of memory/i.test(m)) {
+      _webgpuKnownBad = true;  // suppress further WebGPU attempts this session
+      console.warn('[imagehide] worker init failed, respawning WASM-only (and disabling WebGPU for the rest of this session):', m);
       await _spawnAndInit(mode, { forceWasm: true });
     } else {
       throw e;
