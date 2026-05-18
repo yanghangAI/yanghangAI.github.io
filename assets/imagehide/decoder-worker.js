@@ -50,8 +50,18 @@ function diag(msg) {
   try { self.postMessage({ id: 0, type: 'diag', message: `${_DIAG_TAG} ${msg}` }); } catch (_) {}
 }
 
+function isIOS() {
+  // iPhone/iPad/iPod (all use WebKit). iOS Safari exposes navigator.gpu but
+  // WebGPU session creation in DedicatedWorkers is unstable enough to make
+  // the demo intermittent — sometimes works, sometimes OOMs the tab before
+  // our worker-respawn recovery can catch it. macOS Safari is fine.
+  const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+  return /iPhone|iPad|iPod/i.test(ua);
+}
+
 async function detectWebGPU() {
   if (typeof navigator === 'undefined' || !('gpu' in navigator)) return false;
+  if (isIOS()) return false;
   try {
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
