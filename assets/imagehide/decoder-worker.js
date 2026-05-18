@@ -91,14 +91,24 @@ async function _refreshSession() {
   if (!session || !cachedBytes) return;
   diag(`refreshing ${sessionMode} session after ${runsSinceRefresh} runs`);
   const mode = sessionMode;
-  await _teardownGPU('periodic refresh');
+  try {
+    await _teardownGPU('periodic refresh');
+  } catch (e) {
+    diag(`teardown threw (continuing): ${e.message}`);
+  }
   const t0 = performance.now();
-  session = await withTimeout(
-    ort.InferenceSession.create(cachedBytes, SESS_OPTS),
-    15000, `${mode} webgpu refresh`);
-  sessionMode = mode;
-  runsSinceRefresh = 0;
-  diag(`session refresh done in ${(performance.now()-t0).toFixed(0)}ms`);
+  try {
+    session = await withTimeout(
+      ort.InferenceSession.create(cachedBytes, SESS_OPTS),
+      15000, `${mode} webgpu refresh`);
+    sessionMode = mode;
+    runsSinceRefresh = 0;
+    diag(`session refresh done in ${(performance.now()-t0).toFixed(0)}ms`);
+  } catch (e) {
+    diag(`session refresh re-create FAILED: ${e.message}`);
+    // Leave session=null; the next decode/encode will trigger a full init.
+    throw e;
+  }
 }
 
 const ORT_VERSION = '1.20.0';
@@ -261,7 +271,12 @@ async function handle(msg) {
       // strand the ORT tensor wrappers (which can pin GPU buffers).
       disposeTensor(imgT); disposeTensor(bitsT); disposeTensor(permT);
       disposeTensor(container_rgb);
-      if (runsSinceRefresh >= REFRESH_EVERY) await _refreshSession();
+      if (runsSinceRefresh >= REFRESH_EVERY) {
+        // Refresh failure must not replace the already-computed user result.
+        // We've already returned from the try block; this is housekeeping.
+        try { await _refreshSession(); }
+        catch (e) { diag(`refresh failed (non-fatal for this run): ${e.message}`); }
+      }
     }
   }
 
@@ -292,7 +307,12 @@ async function handle(msg) {
       return { type: 'decoded', bitsBuf: bits.buffer, ms, transfer: [bits.buffer] };
     } finally {
       disposeTensor(t); disposeTensor(permT); disposeTensor(bit_logits);
-      if (runsSinceRefresh >= REFRESH_EVERY) await _refreshSession();
+      if (runsSinceRefresh >= REFRESH_EVERY) {
+        // Refresh failure must not replace the already-computed user result.
+        // We've already returned from the try block; this is housekeeping.
+        try { await _refreshSession(); }
+        catch (e) { diag(`refresh failed (non-fatal for this run): ${e.message}`); }
+      }
     }
   }
 
