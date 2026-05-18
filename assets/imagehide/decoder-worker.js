@@ -39,12 +39,24 @@ let runsSinceRefresh = 0;    // count of session.run() calls on current
                              // to bound ORT-internal WebGPU buffer growth.
 const REFRESH_EVERY = (() => {
   const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
-  // iOS Safari has the tightest WebGPU pool — refresh aggressively. macOS
-  // can amortize over many more runs.
-  if (/iPhone|iPad|iPod/i.test(ua)) return 4;
-  if (/Android/i.test(ua))           return 6;
+  // iOS WebGPU pool is tiny and session.release() doesn't aggressively
+  // drain it — refresh after every other run to bound the growth.
+  if (/iPhone|iPad|iPod/i.test(ua)) return 2;
+  if (/Android/i.test(ua))           return 4;
   return 30;
 })();
+
+// Session creation options. enableMemPattern=false disables ORT's memory
+// pattern optimization that caches per-session memory plans; this otherwise
+// keeps device buffers alive across runs. enableCpuMemArena=false stops
+// ORT from holding a CPU staging arena (small but adds up at 0.5 MP).
+const SESS_OPTS = {
+  executionProviders: ['webgpu'],
+  enableMemPattern: false,
+  enableCpuMemArena: false,
+};
+
+function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function _refreshSession() {
   if (!session || !cachedBytes) return;
@@ -52,9 +64,14 @@ async function _refreshSession() {
   const mode = sessionMode;
   try { session.release(); } catch (_) {}
   session = null;
+  // iOS WebGPU needs a beat to actually drop the released device buffers
+  // before we allocate the new session — otherwise the new InferenceSession
+  // sees the pool still partially full and either OOMs or quietly reuses
+  // stale buffers (which is the leak we're trying to fix).
+  await _sleep(300);
   const t0 = performance.now();
   session = await withTimeout(
-    ort.InferenceSession.create(cachedBytes, { executionProviders: ['webgpu'] }),
+    ort.InferenceSession.create(cachedBytes, SESS_OPTS),
     10000, `${mode} webgpu refresh`);
   sessionMode = mode;
   runsSinceRefresh = 0;
@@ -144,6 +161,13 @@ async function handle(msg) {
     if (!ort) {
       ort = await import(ORT_BUNDLE);
       if (ort.env && ort.env.wasm) ort.env.wasm.wasmPaths = ORT_BASE;
+      if (ort.env && ort.env.webgpu) {
+        // Flush WebGPU command queue after every session.run() so the device
+        // releases per-run intermediate buffers immediately. Default (false)
+        // batches commands which keeps GPU buffers pinned across runs —
+        // exactly the leak that crashes iPhone Safari after 3-6 attacks.
+        ort.env.webgpu.flushAfterRun = true;
+      }
     }
     const { mode, modelBuf } = msg;
     // Release any prior session WITHIN THIS SAME WORKER before creating the
@@ -164,7 +188,7 @@ async function handle(msg) {
     }
     const t0 = performance.now();
     session = await withTimeout(
-      ort.InferenceSession.create(bytes, { executionProviders: ['webgpu'] }),
+      ort.InferenceSession.create(bytes, SESS_OPTS),
       10000, `${mode} webgpu init`);
     diag(`WebGPU session ready for ${mode} in ${(performance.now()-t0).toFixed(0)}ms`);
     sessionMode = mode;
