@@ -60,16 +60,6 @@ function isIOS() {
 
 async function detectWebGPU() {
   if (typeof navigator === 'undefined' || !('gpu' in navigator)) return false;
-  // iOS skip: tried multiple times to make WebGPU usable on iPhone. The
-  // attempt itself reserves GPU resources that iOS doesn't release even on
-  // worker.terminate(), starving the WASM fallback. Symptom: encode/decode
-  // fails with "no available backend found. ERR: [wasm] RangeError: Out of
-  // memory" even though the page had plenty of headroom on entry. macOS
-  // Safari is unaffected — keep WebGPU there.
-  if (isIOS()) {
-    diag('WebGPU: skipping on iOS (pins GPU memory, breaks WASM fallback)');
-    return false;
-  }
   try {
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
@@ -125,37 +115,19 @@ async function handle(msg) {
       ort = await import(ORT_BUNDLE);
       if (ort.env && ort.env.wasm) ort.env.wasm.wasmPaths = ORT_BASE;
     }
-    const { mode, modelBuf, forceWasm } = msg;
+    const { mode, modelBuf } = msg;
     const bytes = new Uint8Array(modelBuf);
-    const tryWebGPU = !forceWasm && (await detectWebGPU());
-    if (tryWebGPU) {
-      try {
-        // iOS: webgpu-only (no WASM in providers list). When WebGPU
-        // partially fails inside a mixed list, ORT half-initializes WASM
-        // and caches an init failure — which then kills the wasm-only
-        // respawn too. With webgpu-only, a failure leaves WASM untouched
-        // and pipeline.js's respawn-as-forceWasm starts clean.
-        // macOS / non-iOS: keep mixed list (some ops benefit from the
-        // WASM fallback inside the same session, e.g. shape ops).
-        const providers = isIOS() ? ['webgpu'] : ['webgpu', 'wasm'];
-        const t0 = performance.now();
-        session = await withTimeout(
-          ort.InferenceSession.create(bytes, { executionProviders: providers }),
-          10000, `${mode} webgpu init`);
-        diag(`WebGPU session ready for ${mode} (providers=${providers.join(',')}) in ${(performance.now()-t0).toFixed(0)}ms`);
-        sessionMode = mode;
-        activeBackend = 'webgpu';
-        return { type: 'ready', backend: activeBackend, transfer: [] };
-      } catch (e) {
-        diag(`WebGPU session create failed for ${mode}: ${e.message}`);
-        try { session?.release?.(); } catch (_) {}
-        session = null;
-      }
+    const hasWebGPU = await detectWebGPU();
+    if (!hasWebGPU) {
+      throw new Error('WebGPU not available (this build is WebGPU-only by request — no WASM fallback). On iOS make sure Safari 18+ with WebGPU enabled.');
     }
-    diag(`Using WASM backend for ${mode}`);
-    session = await ort.InferenceSession.create(bytes, { executionProviders: ['wasm'] });
+    const t0 = performance.now();
+    session = await withTimeout(
+      ort.InferenceSession.create(bytes, { executionProviders: ['webgpu'] }),
+      10000, `${mode} webgpu init`);
+    diag(`WebGPU session ready for ${mode} in ${(performance.now()-t0).toFixed(0)}ms`);
     sessionMode = mode;
-    activeBackend = 'wasm';
+    activeBackend = 'webgpu';
     return { type: 'ready', backend: activeBackend, transfer: [] };
   }
 
