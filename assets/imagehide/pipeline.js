@@ -97,34 +97,12 @@ function _isMobileUA() {
 
 function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-async function _gracefulShutdownWorker() {
-  if (!worker) return;
-  // 1. Ask the worker to release its ORT session cleanly. This flushes any
-  //    in-flight WebGPU command buffers so the GPU side actually drops the
-  //    device-backed tensors instead of waiting for the dead worker's GC.
-  //    Best-effort: cap at 2 s so a wedged worker can't hang the page.
-  try {
-    await Promise.race([
-      send({ type: 'release' }),
-      _sleep(2000),
-    ]);
-  } catch (_) { /* worker may already be wedged */ }
-  // 2. Now actually terminate the worker thread.
-  worker.terminate();
-  worker = null;
-  workerMode = null;
-  // Clear any pending callbacks left over from the in-flight release msg.
-  for (const p of pending.values()) p.reject(new Error('session released'));
-  pending.clear();
-  // 3. On iOS/Android the WebGPU device + WASM heap reclaim is asynchronous.
-  //    Pause briefly so the next worker's allocation doesn't race against
-  //    not-yet-released GPU buffers from the previous worker.
-  if (_isMobileUA()) await _sleep(400);
-}
-
+// Mode switch never terminates the worker — terminate-then-spawn caused iOS
+// to retain WebGPU device buffers tied to the dead worker, starving the next
+// worker's allocation. The worker handles session.release()+create internally
+// in its 'init' handler so the WebGPU context stays warm across mode switches.
 async function ensureMode(mode) {
   if (workerMode === mode && worker) return;
-  await _gracefulShutdownWorker();
   ensureWorker();
   const buf = mode === 'encoder' ? encoderBuf : decoderBuf;
   const clone = buf.slice(0);
@@ -213,14 +191,19 @@ export async function decode(containerImageData, perm) {
 }
 
 /**
- * Gracefully release the worker: ask ORT to release its session first
- * (flushes WebGPU/WASM device resources), then terminate the worker so
- * the WASM linear memory is returned to the OS. Cached model bytes are
- * kept in main memory so the next `encode`/`decode` call lazily re-spawns.
- *
- * Returns a Promise that resolves once the shutdown is fully complete —
- * call sites that need memory freed before continuing should await it.
+ * Release the worker's current session without terminating the worker.
+ * Keeping the worker alive preserves the WebGPU context so the next
+ * session creation doesn't race against an iOS device-buffer reclaim
+ * (which never completes for terminated workers). The released session's
+ * GPU buffers ARE freed by ORT's session.release() inside the worker.
  */
 export async function releaseSession() {
-  await _gracefulShutdownWorker();
+  if (!worker) return;
+  try {
+    await Promise.race([
+      send({ type: 'release' }),
+      _sleep(2000),
+    ]);
+  } catch (_) { /* worker may be wedged; ignore */ }
+  workerMode = null;
 }

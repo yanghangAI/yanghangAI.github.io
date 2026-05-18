@@ -110,12 +110,23 @@ function imageBufToFloat32CHW(buf, W, H) {
 
 async function handle(msg) {
   if (msg.type === 'init') {
-    diag(`init received for mode=${msg.mode}${msg.forceWasm ? ' forceWasm=true' : ''}`);
+    diag(`init received for mode=${msg.mode} (prior session: ${sessionMode || 'none'})`);
     if (!ort) {
       ort = await import(ORT_BUNDLE);
       if (ort.env && ort.env.wasm) ort.env.wasm.wasmPaths = ORT_BASE;
     }
     const { mode, modelBuf } = msg;
+    // Release any prior session WITHIN THIS SAME WORKER before creating the
+    // new one. This is the key for iOS: ORT's session.release() actually
+    // frees WebGPU device buffers when called inside a live worker context;
+    // when the worker is terminated instead, iOS holds the GPU memory
+    // indefinitely, starving the next worker's allocation and OOMing.
+    if (session) {
+      diag(`releasing prior ${sessionMode} session before re-init`);
+      try { session.release(); } catch (_) {}
+      session = null;
+      sessionMode = null;
+    }
     const bytes = new Uint8Array(modelBuf);
     const hasWebGPU = await detectWebGPU();
     if (!hasWebGPU) {
