@@ -15,7 +15,8 @@ media chains). Everything runs client-side in a Web Worker.
   `assets/imagehide/{encoder,decoder}.onnx`. ~0.6 / 1.1 MB each.
 - **Wire payload (796 bits)**: BCH(127, t=4) syndrome of pHash (28b) +
   Ed25519 sig (512b) + pk (256b). RS(128, 100) over GF(2^8) wraps it
-  into the 1024-bit codeword the model embeds.
+  into the 1024-bit codeword the model embeds. See
+  [`ECC_DESIGN.md`](ECC_DESIGN.md) for the Slepian-Wolf-trick rationale.
 - **pHash**: full PDQ (`pdq.js`) — empirical max drift 3/128 across 30
   COCO × 11 attacks.
 
