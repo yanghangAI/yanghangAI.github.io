@@ -55,13 +55,13 @@ function canonicalizeH(H16) {
 const LIBSODIUM_CDN = 'https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/+esm';
 const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-// Desktop 1 MP, mobile 0.5 MP. iPhone now runs WASM-only (d41d474), and
-// WASM's linear-memory cap (~256 MB on iOS) easily fits a single 0.5 MP
-// inference (~50-100 MB peak). The 0.25 MP cap was a precaution for the
-// earlier WebGPU-on-iPhone path where the GPU pool was ~100 MB and leaks
-// accumulated across runs — no longer relevant.
-const MAX_INPUT_PIXELS = (IS_MOBILE ? 0.5 : 1) * 1024 * 1024;
-const MAX_INPUT_MP_LABEL = IS_MOBILE ? '0.5 MP' : '1 MP';
+// Desktop 2 MP, mobile 0.5 MP. Desktop runs WebGPU (FP16 model), forward-pass
+// intermediates scale linearly with pixel count — 2 MP is ~60-120 MB of
+// device memory, well within any reasonable laptop/desktop GPU. iPhone runs
+// WASM-only (d41d474); WASM's iOS linear-memory cap (~256 MB) fits 0.5 MP
+// inference (~50-100 MB peak) with margin.
+const MAX_INPUT_PIXELS = (IS_MOBILE ? 0.5 : 2) * 1024 * 1024;
+const MAX_INPUT_MP_LABEL = IS_MOBILE ? '0.5 MP' : '2 MP';
 // Minimum shorter-dimension after fit. The ONNX models were traced at H=W=256
 // to bake the canonical pHash-adapter permutation; smaller inputs throw a
 // ScatterElements out-of-range error at inference. We upscale anything below
