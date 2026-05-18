@@ -39,21 +39,20 @@ let runsSinceRefresh = 0;    // count of session.run() calls on current
                              // to bound ORT-internal WebGPU buffer growth.
 const REFRESH_EVERY = (() => {
   const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
-  // iOS WebGPU pool is tiny and session.release() doesn't aggressively
-  // drain it — refresh after every other run to bound the growth.
-  if (/iPhone|iPad|iPod/i.test(ua)) return 2;
-  if (/Android/i.test(ua))           return 4;
+  // Refresh frequency: more often = more session-create overhead but
+  // bounds GPU buffer accumulation. iOS is tightest.
+  if (/iPhone|iPad|iPod/i.test(ua)) return 4;
+  if (/Android/i.test(ua))           return 6;
   return 30;
 })();
 
-// Session creation options. enableMemPattern=false disables ORT's memory
-// pattern optimization that caches per-session memory plans; this otherwise
-// keeps device buffers alive across runs. enableCpuMemArena=false stops
-// ORT from holding a CPU staging arena (small but adds up at 0.5 MP).
+// Session creation options. Leave ORT's default memory optimizations ON:
+// enableMemPattern (default true) lets ORT REUSE buffers across runs, which
+// is exactly what we want for bounded memory. enableCpuMemArena (default
+// true) pools CPU staging. The previous version of this file disabled both
+// — that was a mistake; it forced ORT to allocate fresh buffers per run.
 const SESS_OPTS = {
   executionProviders: ['webgpu'],
-  enableMemPattern: false,
-  enableCpuMemArena: false,
 };
 
 function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -77,7 +76,6 @@ async function _teardownGPU(reason) {
   session = null;
   sessionMode = null;
   diag(`session released (${reason})`);
-  await _sleep(500);
 }
 
 async function _refreshSession() {
@@ -187,13 +185,6 @@ async function handle(msg) {
     if (!ort) {
       ort = await import(ORT_BUNDLE);
       if (ort.env && ort.env.wasm) ort.env.wasm.wasmPaths = ORT_BASE;
-      if (ort.env && ort.env.webgpu) {
-        // Flush WebGPU command queue after every session.run() so the device
-        // releases per-run intermediate buffers immediately. Default (false)
-        // batches commands which keeps GPU buffers pinned across runs —
-        // exactly the leak that crashes iPhone Safari after 3-6 attacks.
-        ort.env.webgpu.flushAfterRun = true;
-      }
     }
     const { mode, modelBuf } = msg;
     // Full GPU teardown of any prior session (release + destroy device).
