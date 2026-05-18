@@ -64,15 +64,31 @@ async function _refreshSession() {
   const mode = sessionMode;
   try { session.release(); } catch (_) {}
   session = null;
-  // iOS WebGPU needs a beat to actually drop the released device buffers
-  // before we allocate the new session — otherwise the new InferenceSession
-  // sees the pool still partially full and either OOMs or quietly reuses
-  // stale buffers (which is the leak we're trying to fix).
-  await _sleep(300);
+  // Definitively free all WebGPU memory by destroying the underlying
+  // GPUDevice. session.release() alone leaves the device's buffer pool
+  // intact (and on iOS that pool never shrinks). Destroying the device
+  // forces every buffer to drop and ORT will lazily request a fresh
+  // adapter+device on the next session.create().
+  try {
+    const dev = ort?.env?.webgpu?.device;
+    if (dev && typeof dev.destroy === 'function') {
+      dev.destroy();
+      diag('destroyed WebGPU device');
+    }
+    if (ort?.env?.webgpu) {
+      ort.env.webgpu.device = undefined;
+      ort.env.webgpu.adapter = undefined;
+    }
+  } catch (e) {
+    diag(`device destroy failed (continuing): ${e.message}`);
+  }
+  // Long-ish pause so iOS actually reclaims the destroyed device's
+  // memory before we ask for a new one.
+  await _sleep(500);
   const t0 = performance.now();
   session = await withTimeout(
     ort.InferenceSession.create(cachedBytes, SESS_OPTS),
-    10000, `${mode} webgpu refresh`);
+    15000, `${mode} webgpu refresh`);
   sessionMode = mode;
   runsSinceRefresh = 0;
   diag(`session refresh done in ${(performance.now()-t0).toFixed(0)}ms`);
