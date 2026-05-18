@@ -51,17 +51,15 @@ function diag(msg) {
 }
 
 function isIOS() {
-  // iPhone/iPad/iPod (all use WebKit). iOS Safari exposes navigator.gpu but
-  // WebGPU session creation in DedicatedWorkers is unstable enough to make
-  // the demo intermittent — sometimes works, sometimes OOMs the tab before
-  // our worker-respawn recovery can catch it. macOS Safari is fine.
+  // iPhone/iPad/iPod (all WebKit). Used to pick a WebGPU-only provider list
+  // on iOS so a partial WebGPU init can't poison the shared WASM init in
+  // the same session. macOS Safari is stable with the mixed provider list.
   const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
   return /iPhone|iPad|iPod/i.test(ua);
 }
 
 async function detectWebGPU() {
   if (typeof navigator === 'undefined' || !('gpu' in navigator)) return false;
-  if (isIOS()) return false;
   try {
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
@@ -122,11 +120,19 @@ async function handle(msg) {
     const tryWebGPU = !forceWasm && (await detectWebGPU());
     if (tryWebGPU) {
       try {
+        // iOS: webgpu-only (no WASM in providers list). When WebGPU
+        // partially fails inside a mixed list, ORT half-initializes WASM
+        // and caches an init failure — which then kills the wasm-only
+        // respawn too. With webgpu-only, a failure leaves WASM untouched
+        // and pipeline.js's respawn-as-forceWasm starts clean.
+        // macOS / non-iOS: keep mixed list (some ops benefit from the
+        // WASM fallback inside the same session, e.g. shape ops).
+        const providers = isIOS() ? ['webgpu'] : ['webgpu', 'wasm'];
         const t0 = performance.now();
         session = await withTimeout(
-          ort.InferenceSession.create(bytes, { executionProviders: ['webgpu', 'wasm'] }),
+          ort.InferenceSession.create(bytes, { executionProviders: providers }),
           10000, `${mode} webgpu init`);
-        diag(`WebGPU session ready for ${mode} in ${(performance.now()-t0).toFixed(0)}ms`);
+        diag(`WebGPU session ready for ${mode} (providers=${providers.join(',')}) in ${(performance.now()-t0).toFixed(0)}ms`);
         sessionMode = mode;
         activeBackend = 'webgpu';
         return { type: 'ready', backend: activeBackend, transfer: [] };
