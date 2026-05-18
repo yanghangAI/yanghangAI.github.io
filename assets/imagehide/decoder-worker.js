@@ -48,6 +48,12 @@ const REFRESH_EVERY = (() => {
 
 async function _refreshSession() {
   if (!session || !cachedBytes) return;
+  // WASM doesn't need the WebGPU-style refresh — its memory model uses
+  // pattern reuse across runs and the heap doesn't accumulate per run.
+  if (activeBackend !== 'webgpu') {
+    runsSinceRefresh = 0;
+    return;
+  }
   diag(`refreshing ${sessionMode} session after ${runsSinceRefresh} runs`);
   const mode = sessionMode;
   try { session.release(); } catch (_) {}
@@ -81,15 +87,20 @@ function diag(msg) {
 }
 
 function isIOS() {
-  // iPhone/iPad/iPod (all WebKit). Used to pick a WebGPU-only provider list
-  // on iOS so a partial WebGPU init can't poison the shared WASM init in
-  // the same session. macOS Safari is stable with the mixed provider list.
+  // iPhone/iPad/iPod (all WebKit). iOS Safari exposes navigator.gpu but
+  // WebGPU on iOS can't fit our model in the per-tab pool (~100 MB),
+  // and the leftover GPU state across reloads makes failures intermittent.
+  // WASM is slower but predictable. macOS Safari WebGPU works fine.
   const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
   return /iPhone|iPad|iPod/i.test(ua);
 }
 
 async function detectWebGPU() {
   if (typeof navigator === 'undefined' || !('gpu' in navigator)) return false;
+  if (isIOS()) {
+    diag('WebGPU available but skipped on iOS — using WASM instead');
+    return false;
+  }
   try {
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
@@ -159,16 +170,14 @@ async function handle(msg) {
     }
     const bytes = new Uint8Array(modelBuf);
     const hasWebGPU = await detectWebGPU();
-    if (!hasWebGPU) {
-      throw new Error('WebGPU not available (this build is WebGPU-only by request — no WASM fallback). On iOS make sure Safari 18+ with WebGPU enabled.');
-    }
+    const providers = hasWebGPU ? ['webgpu'] : ['wasm'];
     const t0 = performance.now();
     session = await withTimeout(
-      ort.InferenceSession.create(bytes, { executionProviders: ['webgpu'] }),
-      10000, `${mode} webgpu init`);
-    diag(`WebGPU session ready for ${mode} in ${(performance.now()-t0).toFixed(0)}ms`);
+      ort.InferenceSession.create(bytes, { executionProviders: providers }),
+      15000, `${mode} ${providers[0]} init`);
+    diag(`${providers[0]} session ready for ${mode} in ${(performance.now()-t0).toFixed(0)}ms`);
     sessionMode = mode;
-    activeBackend = 'webgpu';
+    activeBackend = providers[0];
     cachedBytes = bytes;          // keep for _refreshSession
     runsSinceRefresh = 0;
     return { type: 'ready', backend: activeBackend, transfer: [] };
