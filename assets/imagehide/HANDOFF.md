@@ -164,7 +164,7 @@ at 0.5 MP works through many decodes.
 
 ### Current memory caps
 
-- Desktop: 4 MP input cap. WebGPU.
+- Desktop: 1 MP input cap. WebGPU.
 - Mobile (incl. iPhone): 0.5 MP. WASM.
 
 ### Worker lifecycle
