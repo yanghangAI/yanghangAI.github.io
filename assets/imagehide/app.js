@@ -54,11 +54,14 @@ function canonicalizeH(H16) {
 
 const LIBSODIUM_CDN = 'https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.13/+esm';
 const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-// Desktop 1 MP, mobile 0.5 MP. iOS Safari's tab budget is ~300 MB and the
-// decoder forward-pass intermediates peak at ~60-120 MB per megapixel, so
-// 1 MP cuts it too close on phones even with the two-process pipeline.
-const MAX_INPUT_PIXELS = (IS_MOBILE ? 0.5 : 1) * 1024 * 1024;
-const MAX_INPUT_MP_LABEL = IS_MOBILE ? '0.5 MP' : '1 MP';
+// Desktop 1 MP, mobile 0.25 MP. iPhone Safari's per-tab WebGPU budget is
+// ~100 MB and one encode/decode peak alone (input+output+perm+8 INN block
+// activations) is ~55-85 MB at 0.5 MP, leaving no headroom for the next
+// run's allocation before iOS reclaims. At 0.25 MP (~512x512 after trim)
+// the per-run peak drops to ~27-47 MB, leaving room for 2-3 consecutive
+// runs even when session.release() doesn't fully drain the device pool.
+const MAX_INPUT_PIXELS = (IS_MOBILE ? 0.25 : 1) * 1024 * 1024;
+const MAX_INPUT_MP_LABEL = IS_MOBILE ? '0.25 MP' : '1 MP';
 // Minimum shorter-dimension after fit. The ONNX models were traced at H=W=256
 // to bake the canonical pHash-adapter permutation; smaller inputs throw a
 // ScatterElements out-of-range error at inference. We upscale anything below
