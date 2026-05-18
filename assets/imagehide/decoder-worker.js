@@ -58,33 +58,40 @@ const SESS_OPTS = {
 
 function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-async function _refreshSession() {
-  if (!session || !cachedBytes) return;
-  diag(`refreshing ${sessionMode} session after ${runsSinceRefresh} runs`);
-  const mode = sessionMode;
-  try { session.release(); } catch (_) {}
+// Fully tear down the active session AND the underlying WebGPU device so the
+// device's buffer pool drops every byte before we allocate again.
+// session.release() alone leaves the pool intact, and on iOS that pool never
+// shrinks — only destroying the GPUDevice forces a real flush. Used by both
+// the mode switch (init handler) and the periodic refresh path.
+async function _teardownGPU(reason) {
+  if (session) {
+    try { session.release(); } catch (_) {}
+  }
   session = null;
-  // Definitively free all WebGPU memory by destroying the underlying
-  // GPUDevice. session.release() alone leaves the device's buffer pool
-  // intact (and on iOS that pool never shrinks). Destroying the device
-  // forces every buffer to drop and ORT will lazily request a fresh
-  // adapter+device on the next session.create().
+  sessionMode = null;
   try {
     const dev = ort?.env?.webgpu?.device;
     if (dev && typeof dev.destroy === 'function') {
       dev.destroy();
-      diag('destroyed WebGPU device');
+      diag(`destroyed WebGPU device (${reason})`);
     }
     if (ort?.env?.webgpu) {
       ort.env.webgpu.device = undefined;
       ort.env.webgpu.adapter = undefined;
     }
   } catch (e) {
-    diag(`device destroy failed (continuing): ${e.message}`);
+    diag(`device destroy failed (${reason}, continuing): ${e.message}`);
   }
   // Long-ish pause so iOS actually reclaims the destroyed device's
   // memory before we ask for a new one.
   await _sleep(500);
+}
+
+async function _refreshSession() {
+  if (!session || !cachedBytes) return;
+  diag(`refreshing ${sessionMode} session after ${runsSinceRefresh} runs`);
+  const mode = sessionMode;
+  await _teardownGPU('periodic refresh');
   const t0 = performance.now();
   session = await withTimeout(
     ort.InferenceSession.create(cachedBytes, SESS_OPTS),
@@ -186,16 +193,15 @@ async function handle(msg) {
       }
     }
     const { mode, modelBuf } = msg;
-    // Release any prior session WITHIN THIS SAME WORKER before creating the
-    // new one. This is the key for iOS: ORT's session.release() actually
-    // frees WebGPU device buffers when called inside a live worker context;
-    // when the worker is terminated instead, iOS holds the GPU memory
-    // indefinitely, starving the next worker's allocation and OOMing.
+    // Full GPU teardown of any prior session (release + destroy device).
+    // iOS's WebGPU pool keeps device buffers alive across session.release()
+    // alone, so a mode switch (encoder → decoder) would otherwise leave the
+    // prior session's GPU memory pinned while the new session allocates on
+    // top — peak doubles, iOS kills the tab. Destroying the GPUDevice
+    // forces a real flush.
     if (session) {
-      diag(`releasing prior ${sessionMode} session before re-init`);
-      try { session.release(); } catch (_) {}
-      session = null;
-      sessionMode = null;
+      diag(`tearing down prior ${sessionMode} session for mode switch`);
+      await _teardownGPU('mode switch');
     }
     const bytes = new Uint8Array(modelBuf);
     const hasWebGPU = await detectWebGPU();
@@ -291,14 +297,11 @@ async function handle(msg) {
   }
 
   if (msg.type === 'release') {
-    // Cleanly release ORT session resources before the worker is terminated.
-    // ORT's session.release() flushes any in-flight WebGPU command buffers and
-    // frees device-side buffers. Without this, on iOS Safari the GPU side
-    // doesn't release the buffers until the worker is garbage-collected,
-    // which can race with the next worker's WebGPU allocation.
-    try { session?.release?.(); } catch (_) {}
-    session = null;
-    sessionMode = null;
+    // Full teardown: release session + destroy WebGPU device. Called by
+    // main-thread releaseSession() (e.g., after encode, before user starts
+    // the decode loop). Frees ALL GPU memory so the next session.create()
+    // starts from a clean WebGPU pool.
+    await _teardownGPU('explicit release');
     return { type: 'released', transfer: [] };
   }
 
