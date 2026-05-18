@@ -39,67 +39,26 @@ let runsSinceRefresh = 0;    // count of session.run() calls on current
                              // to bound ORT-internal WebGPU buffer growth.
 const REFRESH_EVERY = (() => {
   const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
-  // Refresh frequency: more often = more session-create overhead but
-  // bounds GPU buffer accumulation. iOS is tightest.
+  // iOS Safari has the tightest WebGPU pool — refresh aggressively. macOS
+  // can amortize over many more runs.
   if (/iPhone|iPad|iPod/i.test(ua)) return 4;
   if (/Android/i.test(ua))           return 6;
   return 30;
 })();
 
-// Session creation options. Leave ORT's default memory optimizations ON:
-// enableMemPattern (default true) lets ORT REUSE buffers across runs, which
-// is exactly what we want for bounded memory. enableCpuMemArena (default
-// true) pools CPU staging. The previous version of this file disabled both
-// — that was a mistake; it forced ORT to allocate fresh buffers per run.
-const SESS_OPTS = {
-  executionProviders: ['webgpu'],
-};
-
-function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-// Release the active ORT session and wait briefly so iOS has a chance to
-// reclaim its GPU buffers before the next allocation.
-//
-// We tried destroying the underlying GPUDevice here too (commit 65d9753 /
-// 9ee58b9) — that's the only thing that definitively flushes WebGPU memory
-// on iOS — but ORT's WebGPU backend holds an internal reference to the
-// device that survives `ort.env.webgpu.device = undefined`, and the next
-// `InferenceSession.create()` then throws "Range consisting of offset and
-// length are out of bounds" trying to use a destroyed device. So we leave
-// the device alone and rely on session.release() alone.
-async function _teardownGPU(reason) {
-  if (session) {
-    try { session.release(); } catch (e) {
-      diag(`session.release threw (${reason}, continuing): ${e.message}`);
-    }
-  }
-  session = null;
-  sessionMode = null;
-  diag(`session released (${reason})`);
-}
-
 async function _refreshSession() {
   if (!session || !cachedBytes) return;
   diag(`refreshing ${sessionMode} session after ${runsSinceRefresh} runs`);
   const mode = sessionMode;
-  try {
-    await _teardownGPU('periodic refresh');
-  } catch (e) {
-    diag(`teardown threw (continuing): ${e.message}`);
-  }
+  try { session.release(); } catch (_) {}
+  session = null;
   const t0 = performance.now();
-  try {
-    session = await withTimeout(
-      ort.InferenceSession.create(cachedBytes, SESS_OPTS),
-      15000, `${mode} webgpu refresh`);
-    sessionMode = mode;
-    runsSinceRefresh = 0;
-    diag(`session refresh done in ${(performance.now()-t0).toFixed(0)}ms`);
-  } catch (e) {
-    diag(`session refresh re-create FAILED: ${e.message}`);
-    // Leave session=null; the next decode/encode will trigger a full init.
-    throw e;
-  }
+  session = await withTimeout(
+    ort.InferenceSession.create(cachedBytes, { executionProviders: ['webgpu'] }),
+    10000, `${mode} webgpu refresh`);
+  sessionMode = mode;
+  runsSinceRefresh = 0;
+  diag(`session refresh done in ${(performance.now()-t0).toFixed(0)}ms`);
 }
 
 const ORT_VERSION = '1.20.0';
@@ -187,15 +146,16 @@ async function handle(msg) {
       if (ort.env && ort.env.wasm) ort.env.wasm.wasmPaths = ORT_BASE;
     }
     const { mode, modelBuf } = msg;
-    // Full GPU teardown of any prior session (release + destroy device).
-    // iOS's WebGPU pool keeps device buffers alive across session.release()
-    // alone, so a mode switch (encoder → decoder) would otherwise leave the
-    // prior session's GPU memory pinned while the new session allocates on
-    // top — peak doubles, iOS kills the tab. Destroying the GPUDevice
-    // forces a real flush.
+    // Release any prior session WITHIN THIS SAME WORKER before creating the
+    // new one. This is the key for iOS: ORT's session.release() actually
+    // frees WebGPU device buffers when called inside a live worker context;
+    // when the worker is terminated instead, iOS holds the GPU memory
+    // indefinitely, starving the next worker's allocation and OOMing.
     if (session) {
-      diag(`tearing down prior ${sessionMode} session for mode switch`);
-      await _teardownGPU('mode switch');
+      diag(`releasing prior ${sessionMode} session before re-init`);
+      try { session.release(); } catch (_) {}
+      session = null;
+      sessionMode = null;
     }
     const bytes = new Uint8Array(modelBuf);
     const hasWebGPU = await detectWebGPU();
@@ -204,7 +164,7 @@ async function handle(msg) {
     }
     const t0 = performance.now();
     session = await withTimeout(
-      ort.InferenceSession.create(bytes, SESS_OPTS),
+      ort.InferenceSession.create(bytes, { executionProviders: ['webgpu'] }),
       10000, `${mode} webgpu init`);
     diag(`WebGPU session ready for ${mode} in ${(performance.now()-t0).toFixed(0)}ms`);
     sessionMode = mode;
@@ -255,12 +215,7 @@ async function handle(msg) {
       // strand the ORT tensor wrappers (which can pin GPU buffers).
       disposeTensor(imgT); disposeTensor(bitsT); disposeTensor(permT);
       disposeTensor(container_rgb);
-      if (runsSinceRefresh >= REFRESH_EVERY) {
-        // Refresh failure must not replace the already-computed user result.
-        // We've already returned from the try block; this is housekeeping.
-        try { await _refreshSession(); }
-        catch (e) { diag(`refresh failed (non-fatal for this run): ${e.message}`); }
-      }
+      if (runsSinceRefresh >= REFRESH_EVERY) await _refreshSession();
     }
   }
 
@@ -291,21 +246,19 @@ async function handle(msg) {
       return { type: 'decoded', bitsBuf: bits.buffer, ms, transfer: [bits.buffer] };
     } finally {
       disposeTensor(t); disposeTensor(permT); disposeTensor(bit_logits);
-      if (runsSinceRefresh >= REFRESH_EVERY) {
-        // Refresh failure must not replace the already-computed user result.
-        // We've already returned from the try block; this is housekeeping.
-        try { await _refreshSession(); }
-        catch (e) { diag(`refresh failed (non-fatal for this run): ${e.message}`); }
-      }
+      if (runsSinceRefresh >= REFRESH_EVERY) await _refreshSession();
     }
   }
 
   if (msg.type === 'release') {
-    // Full teardown: release session + destroy WebGPU device. Called by
-    // main-thread releaseSession() (e.g., after encode, before user starts
-    // the decode loop). Frees ALL GPU memory so the next session.create()
-    // starts from a clean WebGPU pool.
-    await _teardownGPU('explicit release');
+    // Cleanly release ORT session resources before the worker is terminated.
+    // ORT's session.release() flushes any in-flight WebGPU command buffers and
+    // frees device-side buffers. Without this, on iOS Safari the GPU side
+    // doesn't release the buffers until the worker is garbage-collected,
+    // which can race with the next worker's WebGPU allocation.
+    try { session?.release?.(); } catch (_) {}
+    session = null;
+    sessionMode = null;
     return { type: 'released', transfer: [] };
   }
 
