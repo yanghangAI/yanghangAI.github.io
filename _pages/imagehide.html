@@ -207,7 +207,7 @@ lede: "Embed 896 invisible bits into any image, then recover them after a JPEG r
       <p>
         <strong>Image size cap.</strong> The decoder allocates ~12 MB of float32 per
         megapixel plus ~60–120 MB of forward-pass intermediates. The demo caps input
-        at <strong>2 MP on desktop</strong> (WebGPU, plenty of headroom) and
+        at <strong>4 MP on desktop</strong> (WebGPU, fits any discrete GPU) and
         <strong>0.5 MP on mobile</strong> (WASM on iPhone, where Safari's per-tab
         memory budget is tight). The model itself has no such limit — on a phone NPU
         or server it runs the full image.
