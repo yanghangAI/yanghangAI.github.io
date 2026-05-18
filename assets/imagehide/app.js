@@ -359,7 +359,11 @@ function initEncode() {
     e.preventDefault(); drop.classList.remove('is-dragover');
     loadEncFile(e.dataTransfer.files?.[0]);
   });
-  $('enc-sample').addEventListener('click', e => { e.preventDefault(); loadEncSample(false); });
+  $('enc-sample').addEventListener('click', e => {
+    e.preventDefault();
+    e.stopPropagation();   // don't let the click bubble to the drop area's file input
+    loadEncSample(false);
+  });
   $('enc-clear').addEventListener('click', clearEncCover);
   $('enc-runBtn').addEventListener('click', runEncode);
   $('enc-downloadBtn').addEventListener('click', downloadContainer);

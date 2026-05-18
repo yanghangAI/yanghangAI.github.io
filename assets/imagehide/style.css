@@ -146,6 +146,9 @@
   position: absolute; inset: 0; opacity: 0; cursor: pointer;
 }
 .ih-drop__cta { pointer-events: none; }
+/* Re-enable clicks on the "use the sample" link — otherwise the click
+   passes through the link down to the overlaid file input below. */
+.ih-drop__cta a { pointer-events: auto; }
 .ih-drop__big {
   font-size: 0.95rem;
   color: var(--ink);
