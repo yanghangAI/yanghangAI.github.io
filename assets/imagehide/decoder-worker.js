@@ -215,6 +215,18 @@ async function handle(msg) {
     return { type: 'decoded', bitsBuf: bits.buffer, ms, transfer: [bits.buffer] };
   }
 
+  if (msg.type === 'release') {
+    // Cleanly release ORT session resources before the worker is terminated.
+    // ORT's session.release() flushes any in-flight WebGPU command buffers and
+    // frees device-side buffers. Without this, on iOS Safari the GPU side
+    // doesn't release the buffers until the worker is garbage-collected,
+    // which can race with the next worker's WebGPU allocation.
+    try { session?.release?.(); } catch (_) {}
+    session = null;
+    sessionMode = null;
+    return { type: 'released', transfer: [] };
+  }
+
   throw new Error(`unknown message type: ${msg.type}`);
 }
 

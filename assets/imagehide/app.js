@@ -513,7 +513,10 @@ async function runEncode() {
 
     $('enc-results').classList.remove('is-hidden');
 
-    releaseSession();
+    // Wait for the encoder worker to be fully released before reporting
+    // "Done" — on iOS the WebGPU/WASM device resources reclaim is async
+    // and we want them gone before the user clicks Decode.
+    await releaseSession();
     refreshDecSource();
     setStatus('enc', `Done · ${ms.toFixed(0)} ms.`);
   } catch (e) {
