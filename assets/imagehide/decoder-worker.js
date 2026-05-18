@@ -58,32 +58,25 @@ const SESS_OPTS = {
 
 function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// Fully tear down the active session AND the underlying WebGPU device so the
-// device's buffer pool drops every byte before we allocate again.
-// session.release() alone leaves the pool intact, and on iOS that pool never
-// shrinks — only destroying the GPUDevice forces a real flush. Used by both
-// the mode switch (init handler) and the periodic refresh path.
+// Release the active ORT session and wait briefly so iOS has a chance to
+// reclaim its GPU buffers before the next allocation.
+//
+// We tried destroying the underlying GPUDevice here too (commit 65d9753 /
+// 9ee58b9) — that's the only thing that definitively flushes WebGPU memory
+// on iOS — but ORT's WebGPU backend holds an internal reference to the
+// device that survives `ort.env.webgpu.device = undefined`, and the next
+// `InferenceSession.create()` then throws "Range consisting of offset and
+// length are out of bounds" trying to use a destroyed device. So we leave
+// the device alone and rely on session.release() alone.
 async function _teardownGPU(reason) {
   if (session) {
-    try { session.release(); } catch (_) {}
+    try { session.release(); } catch (e) {
+      diag(`session.release threw (${reason}, continuing): ${e.message}`);
+    }
   }
   session = null;
   sessionMode = null;
-  try {
-    const dev = ort?.env?.webgpu?.device;
-    if (dev && typeof dev.destroy === 'function') {
-      dev.destroy();
-      diag(`destroyed WebGPU device (${reason})`);
-    }
-    if (ort?.env?.webgpu) {
-      ort.env.webgpu.device = undefined;
-      ort.env.webgpu.adapter = undefined;
-    }
-  } catch (e) {
-    diag(`device destroy failed (${reason}, continuing): ${e.message}`);
-  }
-  // Long-ish pause so iOS actually reclaims the destroyed device's
-  // memory before we ask for a new one.
+  diag(`session released (${reason})`);
   await _sleep(500);
 }
 
