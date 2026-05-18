@@ -30,6 +30,36 @@ let ort = null;
 let session = null;          // single active session — either encoder or decoder
 let sessionMode = null;      // 'encoder' | 'decoder'
 let activeBackend = 'wasm';
+let cachedBytes = null;      // Uint8Array of the current model — kept so we
+                             // can recreate the session in-place (periodic
+                             // refresh) without round-tripping bytes from
+                             // the main thread.
+let runsSinceRefresh = 0;    // count of session.run() calls on current
+                             // session; we refresh every REFRESH_EVERY runs
+                             // to bound ORT-internal WebGPU buffer growth.
+const REFRESH_EVERY = (() => {
+  const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+  // iOS Safari has the tightest WebGPU pool — refresh aggressively. macOS
+  // can amortize over many more runs.
+  if (/iPhone|iPad|iPod/i.test(ua)) return 4;
+  if (/Android/i.test(ua))           return 6;
+  return 30;
+})();
+
+async function _refreshSession() {
+  if (!session || !cachedBytes) return;
+  diag(`refreshing ${sessionMode} session after ${runsSinceRefresh} runs`);
+  const mode = sessionMode;
+  try { session.release(); } catch (_) {}
+  session = null;
+  const t0 = performance.now();
+  session = await withTimeout(
+    ort.InferenceSession.create(cachedBytes, { executionProviders: ['webgpu'] }),
+    10000, `${mode} webgpu refresh`);
+  sessionMode = mode;
+  runsSinceRefresh = 0;
+  diag(`session refresh done in ${(performance.now()-t0).toFixed(0)}ms`);
+}
 
 const ORT_VERSION = '1.20.0';
 const ORT_BASE = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
@@ -139,6 +169,8 @@ async function handle(msg) {
     diag(`WebGPU session ready for ${mode} in ${(performance.now()-t0).toFixed(0)}ms`);
     sessionMode = mode;
     activeBackend = 'webgpu';
+    cachedBytes = bytes;          // keep for _refreshSession
+    runsSinceRefresh = 0;
     return { type: 'ready', backend: activeBackend, transfer: [] };
   }
 
@@ -158,54 +190,64 @@ async function handle(msg) {
       const dv = new DataView(permBuf);
       for (let i = 0; i < permLen; i++) permI64[i] = BigInt(dv.getInt32(i << 2, true));
     }
-    const imgT  = new ort.Tensor('float32', imgArr,  [1, 3, H, W]);
-    const bitsT = new ort.Tensor('float32', bitsArr, [1, bitsArr.length]);
-    const permT = new ort.Tensor('int64',   permI64, [12, 1024, permP]);
-    const t0 = performance.now();
-    const { container_rgb } = await session.run({
-      host_rgb: imgT, bits: bitsT, perm_stack: permT });
-    const ms = performance.now() - t0;
-    // Copy the Float32 CHW data out of ORT-owned session memory (clamped to
-    // [-1, 1] to remove tiny overshoots), then transfer the buffer to the
-    // main thread. Main thread converts to uint8 ImageData for display and
-    // keeps the float32 version for the attack pipeline so sub-uint8 residual
-    // survives the resize step.
-    const src = container_rgb.data;
-    const f32Out = new Float32Array(src.length);
-    for (let i = 0; i < src.length; i++) {
-      const v = src[i];
-      f32Out[i] = v < -1 ? -1 : (v > 1 ? 1 : v);
+    let imgT = null, bitsT = null, permT = null, container_rgb = null;
+    try {
+      imgT  = new ort.Tensor('float32', imgArr,  [1, 3, H, W]);
+      bitsT = new ort.Tensor('float32', bitsArr, [1, bitsArr.length]);
+      permT = new ort.Tensor('int64',   permI64, [12, 1024, permP]);
+      const t0 = performance.now();
+      ({ container_rgb } = await session.run({
+        host_rgb: imgT, bits: bitsT, perm_stack: permT }));
+      runsSinceRefresh++;
+      const ms = performance.now() - t0;
+      // Copy the Float32 CHW data out of ORT-owned session memory (clamped to
+      // [-1, 1] to remove tiny overshoots), then transfer the buffer to the
+      // main thread.
+      const src = container_rgb.data;
+      const f32Out = new Float32Array(src.length);
+      for (let i = 0; i < src.length; i++) {
+        const v = src[i];
+        f32Out[i] = v < -1 ? -1 : (v > 1 ? 1 : v);
+      }
+      return { type: 'encoded', f32Buf: f32Out.buffer, ms, transfer: [f32Out.buffer] };
+    } finally {
+      // Dispose unconditionally so a throw inside session.run() doesn't
+      // strand the ORT tensor wrappers (which can pin GPU buffers).
+      disposeTensor(imgT); disposeTensor(bitsT); disposeTensor(permT);
+      disposeTensor(container_rgb);
+      if (runsSinceRefresh >= REFRESH_EVERY) await _refreshSession();
     }
-    disposeTensor(imgT); disposeTensor(bitsT); disposeTensor(permT);
-    disposeTensor(container_rgb);
-    return { type: 'encoded', f32Buf: f32Out.buffer, ms, transfer: [f32Out.buffer] };
   }
 
   if (msg.type === 'decode') {
     if (sessionMode !== 'decoder') throw new Error('worker not in decoder mode');
     const { imageBuf, W, H, permBuf, permP } = msg;
     const arr = imageBufToFloat32CHW(imageBuf, W, H);
-    // Same Int32→Int64 widening trick as encode: read via DataView so we
-    // never hold both views in memory at once.
     const permLen = (permBuf.byteLength >>> 2);
     const permI64 = new BigInt64Array(permLen);
     {
       const dv = new DataView(permBuf);
       for (let i = 0; i < permLen; i++) permI64[i] = BigInt(dv.getInt32(i << 2, true));
     }
-    const t     = new ort.Tensor('float32', arr,     [1, 3, H, W]);
-    const permT = new ort.Tensor('int64',   permI64, [12, 1024, permP]);
-    const t0 = performance.now();
-    const { bit_logits } = await session.run({ container_rgb: t, perm_stack: permT });
-    const ms = performance.now() - t0;
-    const src = bit_logits.data;
-    const bits = new Uint8Array(src.length);
-    for (let i = 0; i < bits.length; i++) {
-      const s = 1 / (1 + Math.exp(-src[i]));
-      bits[i] = s > 0.5 ? 1 : 0;
+    let t = null, permT = null, bit_logits = null;
+    try {
+      t     = new ort.Tensor('float32', arr,     [1, 3, H, W]);
+      permT = new ort.Tensor('int64',   permI64, [12, 1024, permP]);
+      const t0 = performance.now();
+      ({ bit_logits } = await session.run({ container_rgb: t, perm_stack: permT }));
+      runsSinceRefresh++;
+      const ms = performance.now() - t0;
+      const src = bit_logits.data;
+      const bits = new Uint8Array(src.length);
+      for (let i = 0; i < bits.length; i++) {
+        const s = 1 / (1 + Math.exp(-src[i]));
+        bits[i] = s > 0.5 ? 1 : 0;
+      }
+      return { type: 'decoded', bitsBuf: bits.buffer, ms, transfer: [bits.buffer] };
+    } finally {
+      disposeTensor(t); disposeTensor(permT); disposeTensor(bit_logits);
+      if (runsSinceRefresh >= REFRESH_EVERY) await _refreshSession();
     }
-    disposeTensor(t); disposeTensor(permT); disposeTensor(bit_logits);
-    return { type: 'decoded', bitsBuf: bits.buffer, ms, transfer: [bits.buffer] };
   }
 
   if (msg.type === 'release') {
