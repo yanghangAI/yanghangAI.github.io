@@ -60,6 +60,16 @@ function isIOS() {
 
 async function detectWebGPU() {
   if (typeof navigator === 'undefined' || !('gpu' in navigator)) return false;
+  // iOS skip: tried multiple times to make WebGPU usable on iPhone. The
+  // attempt itself reserves GPU resources that iOS doesn't release even on
+  // worker.terminate(), starving the WASM fallback. Symptom: encode/decode
+  // fails with "no available backend found. ERR: [wasm] RangeError: Out of
+  // memory" even though the page had plenty of headroom on entry. macOS
+  // Safari is unaffected — keep WebGPU there.
+  if (isIOS()) {
+    diag('WebGPU: skipping on iOS (pins GPU memory, breaks WASM fallback)');
+    return false;
+  }
   try {
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
