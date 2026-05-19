@@ -1,282 +1,45 @@
 ---
 layout: archive
-title: "Imagehide demo"
+title: "Imagehide demo — moved"
 permalink: /imagehide-demo/
-lede: "Embed 896 invisible bits into any image, then recover them after a JPEG round-trip, a resize, or a social-platform pipeline. Everything runs on your device."
+lede: "The imagehide browser demo has moved. Redirecting to its new home in the imagehide project repo."
 ---
 
-<link rel="stylesheet" href="{{ '/assets/imagehide/style.css' | relative_url }}">
+<meta http-equiv="refresh" content="0; url=https://yanghangai.github.io/imagehide/demo/">
 
-<div id="ih-globalbar" class="ih-globalbar">
-  <span id="ih-globalbar-text">loading model…</span>
-  <span id="ih-globalbar-version" class="ih-globalbar__version" title="Jekyll site.time at build"></span>
+<style>
+  .redir { max-width: 60ch; margin: 2rem auto; padding: 1rem 1.25rem;
+           font: 0.95rem/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+           color: #333; }
+  .redir h2 { font-size: 1.15rem; margin: 0 0 0.5rem; letter-spacing: -0.01em; }
+  .redir p  { margin: 0.4rem 0; }
+  .redir a  { color: #2563eb; }
+  .redir code { background: #f5f5f4; padding: 1px 5px; border-radius: 3px; font-size: 0.9em; }
+</style>
+
+<div class="redir" role="status" aria-live="polite">
+  <h2>The imagehide demo has moved</h2>
+  <p>The browser demo now lives in the imagehide project repository.</p>
+  <p>
+    New URL:
+    <a id="ih-redir-link" href="https://yanghangai.github.io/imagehide/demo/">
+      yanghangai.github.io/imagehide/demo/
+    </a>
+  </p>
+  <p>You should be redirected automatically. If not, click the link above.</p>
+  <p style="color:#888; font-size:0.85rem; margin-top:1rem;">
+    Sources moved to <code>yanghangAI/imagehide</code> repo, <code>demo/</code> tree.
+    This page is just a redirect stub kept here so older links resolve.
+  </p>
 </div>
 
-<section class="ih">
-  <div class="ih-grid">
-
-    <!-- ============================ ENCODE ============================ -->
-    <article class="ih-col" data-col="encode">
-      <header class="ih-col__head">
-        <h2 class="ih-col__title">Encode</h2>
-        <p class="ih-col__sub">Embed a payload into a photo.</p>
-      </header>
-
-      <div class="ih-section">
-        <div class="ih-section__label">Cover image</div>
-        <div id="ih-enc-drop" class="ih-drop">
-          <input id="ih-enc-file" type="file" accept="image/*" class="ih-drop__input">
-          <div class="ih-drop__cta">
-            <div class="ih-drop__big">Drop a photo, or <span class="ih-link">browse</span></div>
-            <div class="ih-drop__small">or <a href="#" id="ih-enc-sample">use the sample</a></div>
-          </div>
-        </div>
-        <div id="ih-enc-preview" class="ih-preview is-hidden">
-          <canvas id="ih-cover"></canvas>
-          <div class="ih-preview__meta">
-            <span id="ih-enc-name">cover</span>
-            <button id="ih-enc-clear" class="ih-textbtn">change</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="ih-section">
-        <div class="ih-section__label">Payload</div>
-        <div class="ih-radios">
-          <label class="ih-radio">
-            <input type="radio" name="ih-bits-source" value="auto" checked>
-            <span><strong>Auto</strong> — pHash + Ed25519 sig + demo pk</span>
-          </label>
-          <label class="ih-radio">
-            <input type="radio" name="ih-bits-source" value="custom">
-            <span><strong>Custom</strong> — type a message (up to 96 chars)</span>
-          </label>
-        </div>
-        <div class="ih-customwrap is-hidden" id="ih-enc-customWrap">
-          <textarea id="ih-enc-customBits"
-                    class="ih-textarea"
-                    rows="2"
-                    maxlength="384"
-                    placeholder="Your secret message…"></textarea>
-          <div class="ih-charcount" id="ih-enc-charcount">0 / 96 bytes</div>
-        </div>
-      </div>
-
-      <div class="ih-runline">
-        <button id="ih-enc-runBtn" class="ih-btn ih-btn--primary" disabled>Encode</button>
-        <span id="ih-enc-status" class="ih-runline__status">Loading model…</span>
-      </div>
-
-      <section id="ih-enc-results" class="ih-results is-hidden" aria-live="polite">
-        <div class="ih-stats">
-          <div class="ih-stat">
-            <div class="ih-stat__val" id="ih-m-psnr">—</div>
-            <div class="ih-stat__lbl">PSNR <span class="ih-stat__unit">dB</span></div>
-          </div>
-          <div class="ih-stat">
-            <div class="ih-stat__val" id="ih-m-ssim">—</div>
-            <div class="ih-stat__lbl">SSIM</div>
-          </div>
-          <div class="ih-stat">
-            <div class="ih-stat__val" id="ih-m-ms">—</div>
-            <div class="ih-stat__lbl">encode time <span class="ih-stat__note" title="Browser WASM is single-threaded with no SIMD model-quantization; a phone NPU runs this same model ~100–500× faster, a server GPU another ~10× on top.">·&nbsp;100–500× in prod</span></div>
-          </div>
-        </div>
-
-        <div class="ih-canvases">
-          <figure>
-            <canvas id="ih-container"></canvas>
-            <figcaption>container (watermarked)</figcaption>
-          </figure>
-          <figure>
-            <canvas id="ih-residual"></canvas>
-            <figcaption>residual ×10</figcaption>
-          </figure>
-        </div>
-
-        <div class="ih-actions">
-          <button id="ih-enc-downloadBtn" class="ih-btn ih-btn--ghost">↓ container.png</button>
-          <button id="ih-enc-toDecodeBtn" class="ih-btn ih-btn--accent">Send to decode →</button>
-        </div>
-
-        <details class="ih-details">
-          <summary>Show payload bits</summary>
-          <pre id="ih-oneshot" class="ih-codeblock"></pre>
-        </details>
-      </section>
-    </article>
-
-    <!-- ============================ DECODE ============================ -->
-    <article class="ih-col" data-col="decode">
-      <header class="ih-col__head">
-        <h2 class="ih-col__title">Decode</h2>
-        <p class="ih-col__sub">Recover the payload — optionally through a channel attack.</p>
-      </header>
-
-      <div class="ih-section">
-        <div class="ih-section__label">Image to decode</div>
-        <div class="ih-radios">
-          <label class="ih-radio">
-            <input type="radio" name="ih-dec-source" value="last" id="ih-dec-srcLast" disabled checked>
-            <span><strong>Last container</strong> <em class="ih-hint" id="ih-dec-lastHint">— none yet, encode one first</em></span>
-          </label>
-          <label class="ih-radio">
-            <input type="radio" name="ih-dec-source" value="upload" id="ih-dec-srcUpload">
-            <span><strong>Upload</strong> — any image with an embedded payload</span>
-          </label>
-        </div>
-        <div id="ih-dec-drop" class="ih-drop ih-drop--small is-hidden">
-          <input id="ih-dec-file" type="file" accept="image/*" class="ih-drop__input">
-          <div class="ih-drop__cta">
-            <div class="ih-drop__big">Drop, or <span class="ih-link">browse</span></div>
-          </div>
-        </div>
-
-        <div id="ih-dec-srcPreview" class="ih-preview is-hidden">
-          <canvas id="ih-dec-srcCanvas"></canvas>
-          <div class="ih-preview__meta">
-            <span id="ih-dec-srcName">image</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="ih-section">
-        <div class="ih-section__label">Channel attack <span class="ih-hint">(applied before decoding)</span></div>
-        <select id="ih-dec-attack" class="ih-select"></select>
-      </div>
-
-      <div class="ih-runline">
-        <button id="ih-dec-runBtn" class="ih-btn ih-btn--primary" disabled>Decode</button>
-        <span id="ih-dec-status" class="ih-runline__status">Waiting for an image…</span>
-      </div>
-
-      <section id="ih-dec-results" class="ih-results is-hidden" aria-live="polite">
-        <div class="ih-stats">
-          <div class="ih-stat">
-            <div class="ih-stat__val" id="ih-d-acc">—</div>
-            <div class="ih-stat__lbl">bit accuracy</div>
-          </div>
-          <div class="ih-stat">
-            <div class="ih-stat__val" id="ih-d-sig">—</div>
-            <div class="ih-stat__lbl" id="ih-d-sig-lbl">signature</div>
-          </div>
-          <div class="ih-stat">
-            <div class="ih-stat__val" id="ih-d-ecc">—</div>
-            <div class="ih-stat__lbl">rs ecc <span class="ih-stat__note" title="Reed-Solomon RS(128, 100) over GF(2^8) corrects up to 14 byte errors anywhere in the 1024-bit codeword. 'clean' = no channel errors; 'N / 14' = ECC patched N corrupted bytes; 'N / 14 (fail)' = more than 14 byte errors slipped through (number is the true byte-diff count vs what we encoded).">·&nbsp;bytes</span></div>
-          </div>
-          <div class="ih-stat">
-            <div class="ih-stat__val" id="ih-d-bch">—</div>
-            <div class="ih-stat__lbl">phash drift <span class="ih-stat__note" title="Slepian-Wolf BCH(127, t=4) over GF(2^7) corrects up to 4 bits of pHash drift between the encoder's H and the receiver's locally-recomputed pHash on the attacked image. PDQ's measured max drift across 30 COCO photos × 11 attacks was 3 bits, so t=4 leaves 1 bit of margin. Number shown is true bit-difference Hamming distance.">·&nbsp;bits</span></div>
-          </div>
-          <div class="ih-stat">
-            <div class="ih-stat__val" id="ih-d-ms">—</div>
-            <div class="ih-stat__lbl">decode time <span class="ih-stat__note" title="Browser WASM is single-threaded with no SIMD model-quantization; a phone NPU runs this same model ~100–500× faster, a server GPU another ~10× on top.">·&nbsp;100–500× in prod</span></div>
-          </div>
-        </div>
-
-        <div id="ih-dec-message" class="ih-message is-hidden"></div>
-
-        <details id="ih-dec-details" class="ih-details">
-          <summary>Show recovered bits</summary>
-          <pre id="ih-dec-output" class="ih-codeblock"></pre>
-        </details>
-      </section>
-    </article>
-
-  </div>
-
-  <details class="ih-about">
-    <summary>About this demo</summary>
-    <div class="ih-about__body">
-      <p>
-        <strong>What it is.</strong> Live demo of the MWIP watermark — an invertible
-        neural network embeds an 896-bit payload (<code>H</code> = 128-bit perceptual hash,
-        <code>sig</code> = 512-bit Ed25519, <code>pk</code> = 256-bit public key) into an
-        image, and a sibling network recovers it after channel distortion.
-      </p>
-      <p>
-        <strong>Demo caveat.</strong> The keypair ships in this page; anyone can forge a
-        valid signature. Real deployment uses device-bound secret keys. The pHash is a
-        placeholder.
-      </p>
-      <p>
-        <strong>Where this runs.</strong> ONNX Runtime Web in a Web Worker, on your
-        device. Your image is never uploaded. <em>Out of scope</em> for the current
-        model: crop, rotate, Gaussian noise, Gaussian blur.
-      </p>
-      <p>
-        <strong>Image size cap.</strong> The decoder allocates ~12 MB of float32 per
-        megapixel plus ~60–120 MB of forward-pass intermediates. The demo caps input
-        at <strong>1 MP on desktop</strong> (WebGPU) and <strong>0.5 MP on mobile</strong>
-        (WASM on iPhone, where Safari's per-tab memory budget is tight). The model
-        itself has no such limit — on a phone NPU or server it runs the full image.
-      </p>
-      <p>
-        <strong>Production speed</strong> per pass (encode ≈ decode — same INN backbone):
-      </p>
-      <table class="ih-perf">
-        <thead>
-          <tr>
-            <th>Photo size</th>
-            <th>Pixels</th>
-            <th>Phone NPU</th>
-            <th>Server GPU fp16</th>
-            <th>Server CPU AVX-512</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>Instagram post</td>           <td>1080×1080 (1.2 MP)</td> <td>~80 ms</td>  <td>~7 ms</td>   <td>~30 ms</td></tr>
-          <tr><td>1080p screen capture</td>     <td>1920×1080 (2.1 MP)</td> <td>~140 ms</td> <td>~12 ms</td>  <td>~55 ms</td></tr>
-          <tr><td>iPhone screenshot</td>        <td>1179×2556 (3.0 MP)</td> <td>~200 ms</td> <td>~17 ms</td>  <td>~80 ms</td></tr>
-          <tr><td>16″ MacBook screenshot</td>   <td>3456×2234 (7.7 MP)</td> <td>~510 ms</td> <td>~45 ms</td>  <td>~200 ms</td></tr>
-          <tr><td>Phone camera (default)</td>   <td>4032×3024 (12 MP)</td>  <td>~1.0 s</td>  <td>~70 ms</td>  <td>~300 ms</td></tr>
-          <tr><td>Phone HQ / iPhone 24 MP</td>  <td>5712×4284 (24 MP)</td>  <td>~2.0 s</td>  <td>~140 ms</td> <td>~600 ms</td></tr>
-          <tr><td>Full-frame DSLR</td>          <td>7008×4672 (33 MP)</td>  <td>~2.7 s</td>  <td>~190 ms</td> <td>~830 ms</td></tr>
-        </tbody>
-      </table>
-      <p style="color:#777;font-style:italic;font-size:0.9rem;margin-top:0.6rem;">
-        Browser-WASM mobile is ~100–500× slower than the phone-NPU target; server GPU is ~10× faster again.
-      </p>
-    </div>
-  </details>
-</section>
-
-<script type="module">
-  const v = '{{ site.time | date: "%s" }}';
-  window.__imagehideVersion = v;
-  const bar = document.getElementById('ih-globalbar-text');
-  if (bar) bar.textContent = `bootstrap v${v} starting…`;
-  const verEl = document.getElementById('ih-globalbar-version');
-  if (verEl) {
-    const d = new Date(parseInt(v, 10) * 1000);
-    const pad = (n) => String(n).padStart(2, '0');
-    verEl.textContent =
-      `build ${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ` +
-      `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC · v${v}`;
-  }
-  console.log('[imagehide] bootstrap starting, version', v);
-
-  // 30s watchdog: if app.js hasn't completed initialization (and replaced
-  // the status text) within 30s, declare a hang explicitly.
-  const watchdog = setTimeout(() => {
-    if (bar && bar.textContent.includes('starting')) {
-      bar.textContent = `bootstrap stalled after 30s — open devtools console for details`;
-      bar.style.color = '#b00020';
-    }
-  }, 30000);
-
-  try {
-    await import(`{{ '/assets/imagehide/app.js' | relative_url }}?v=${v}`);
-    clearTimeout(watchdog);
-    console.log('[imagehide] app.js loaded');
-  } catch (err) {
-    clearTimeout(watchdog);
-    console.error('[imagehide] bootstrap failed:', err);
-    if (bar) {
-      bar.textContent = `bootstrap failed: ${err && err.message ? err.message : err}`;
-      bar.style.color = '#b00020';
-    }
-    document.body.insertAdjacentHTML('beforeend',
-      `<pre style="position:fixed;left:0;right:0;bottom:0;background:#fee;color:#a00;padding:1rem;margin:0;border-top:2px solid #a00;font:0.8rem ui-monospace,monospace;white-space:pre-wrap;z-index:9999;max-height:50vh;overflow:auto">imagehide bootstrap failed:\n${err && err.stack ? err.stack : err}</pre>`);
-  }
+<script>
+  // Belt and suspenders: meta-refresh fires above; JS fallback in case meta is stripped.
+  (function () {
+    var target = 'https://yanghangai.github.io/imagehide/demo/';
+    // Preserve any URL fragment from the original request.
+    if (window.location.hash) target += window.location.hash;
+    // Use replace() so back-button doesn't bounce the user back here.
+    window.location.replace(target);
+  })();
 </script>
